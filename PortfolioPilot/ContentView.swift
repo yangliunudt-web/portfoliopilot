@@ -693,7 +693,7 @@ struct ContentView: View {
         VStack(alignment: .leading, spacing: 10) {
             HStack {
                 Image(systemName: "sparkles").foregroundStyle(.purple)
-                Text("AI 投资建议").font(.headline)
+                Text("AI 调仓建议").font(.headline)
                 Spacer()
             }
 
@@ -716,7 +716,7 @@ struct ContentView: View {
                 Button(action: fetchAIAdvice) {
                     HStack(spacing: 4) {
                         Image(systemName: "brain")
-                        Text(aiAdvice == nil ? "获取 AI 投资建议" : "刷新建议")
+                        Text(aiAdvice == nil ? "获取 AI 调仓建议" : "刷新建议")
                     }
                 }
                 .buttonStyle(.bordered)
@@ -734,7 +734,7 @@ struct ContentView: View {
         aiAdvice = nil
 
         Task {
-            guard await WatchAuthManager.authenticate(reason: "使用 Apple Watch 验证以获取 AI 投资建议") else {
+            guard await WatchAuthManager.authenticate(reason: "使用 Apple Watch 验证以获取 AI 调仓建议") else {
                 await MainActor.run { isLoadingAdvice = false; aiAdvice = nil }
                 return
             }

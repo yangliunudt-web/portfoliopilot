@@ -29,34 +29,32 @@ struct AIAdvisor {
         for cat in categories {
             let pct = totalValue > 0 ? cat.value / totalValue : 0
             let deviation = pct - cat.targetRatio
-            let yield = cat.principal > 0 ? (cat.value / cat.principal - 1) : 0
             categoryLines += """
-            - \(cat.name): 市值 ¥\(String(format: "%.0f", cat.value)), 占 \(String(format: "%.1f", pct * 100))% (目标 \(String(format: "%.1f", cat.targetRatio * 100))%), 偏离 \(String(format: "%+.1f", deviation * 100))%, 收益率 \(String(format: "%+.1f", yield * 100))%
+            - \(cat.name): 市值 ¥\(String(format: "%.0f", cat.value)), 占 \(String(format: "%.1f", pct * 100))% (目标 \(String(format: "%.1f", cat.targetRatio * 100))%), 偏离 \(String(format: "%+.1f", deviation * 100))%
             """
         }
 
         let prompt = """
-        你是投资组合再平衡顾问。目标是"最少操作、可接受平衡"，不要追求完美。
+        你是仓位再平衡助手，给出调仓建议。你的唯一依据是**各品类相对目标比例的偏离程度**。
 
         \(categoryLines)
 
-        规则：
-        - 总资产 ¥\(String(format: "%.0f", totalValue))
-        - 触发阈值：大仓位(≥20%)绝对偏离>\(String(format: "%.0f", absThreshold * 100))%，小仓位相对偏离>\(String(format: "%.0f", relThreshold * 100))%
-        - 不触发 = 已经可接受，不需调整
+        总资产 ¥\(String(format: "%.0f", totalValue))
+        阈值：大仓位(≥20%)绝对偏离>\(String(format: "%.0f", absThreshold * 100))%触发，小仓位相对偏离>\(String(format: "%.0f", relThreshold * 100))%触发
 
-        核心原则：
-        1. 只处理触发阈值的大类，其余维持不动
-        2. 调整后落在"阈值以内"即可，不需要精确回到目标比例
-        3. 优先调整偏离最大的大类（一笔操作解决最大问题）
-        4. 用最少的交易次数完成
+        要求：
+        1. 找出偏离最大的品类（不管正负），优先调整它
+        2. 调整后只须回到阈值以内，不必精确命中目标
+        3. 理由必须引用偏离数据，例如"A股偏离+8%，远超5%阈值，是当前最失衡的品类"
+        4. 绝不以收益率高低作为理由
+        5. 未触发的品类不调整
 
-        回复格式（只给最紧急的1-2项操作）：
-        大类名：增仓/减仓 约¥xxx
-        理由：一句话
-        如无需调整就说"当前无需调整"
+        回复格式（1-2项）：
+        品类：增仓/减仓 约¥xxx
+        理由：（偏离数据）
+        如全部在阈值内就说"当前无需调整"
 
-        100字以内。
+        80字以内。
         """
 
         let body: [String: Any] = [
