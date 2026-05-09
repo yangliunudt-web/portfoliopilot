@@ -554,39 +554,24 @@ struct ContentView: View {
                                 .font(.system(size: 9))
                             }
                         }
-                        .chartOverlay { chartProxy in
-                            GeometryReader { overlayGeo in
-                                let plotFrame: CGRect = {
-                                    if let anchor = chartProxy.plotFrame {
-                                        return overlayGeo[anchor]
-                                    }
-                                    var f = overlayGeo.frame(in: .local)
-                                    f.origin.x += 70; f.size.width -= 70
-                                    return f
-                                }()
-
-                                Color.clear
-                                    .contentShape(Rectangle())
+                        .chartOverlay { _ in
+                            GeometryReader { geo in
+                                Color.clear.contentShape(Rectangle())
                                     .gesture(
                                         DragGesture(minimumDistance: 2)
                                             .onChanged { value in
                                                 isDraggingRange = true
-                                                guard plotFrame.width > 0 else { return }
-                                                let x1 = min(plotFrame.maxX, max(plotFrame.minX, value.startLocation.x))
-                                                let x2 = min(plotFrame.maxX, max(plotFrame.minX, value.location.x))
-                                                let r1 = (x1 - plotFrame.minX) / plotFrame.width
-                                                let r2 = (x2 - plotFrame.minX) / plotFrame.width
-                                                let domain = currentChartDomain
-                                                let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
-                                                let s = domain.lowerBound.addingTimeInterval(r1 * dur)
-                                                let e = domain.lowerBound.addingTimeInterval(r2 * dur)
-                                                rangeSelection = min(s, e)...max(s, e)
+                                                let pts = chartDataPoints
+                                                guard pts.count >= 2, geo.size.width > 0 else { return }
+                                                let r1 = max(0, min(1, value.startLocation.x / geo.size.width))
+                                                let r2 = max(0, min(1, value.location.x / geo.size.width))
+                                                let i1 = Int(r1 * Double(pts.count - 1))
+                                                let i2 = Int(r2 * Double(pts.count - 1))
+                                                rangeSelection = min(pts[i1].date, pts[i2].date)...max(pts[i1].date, pts[i2].date)
                                             }
                                         .onEnded { _ in isDraggingRange = false }
-                                )
-                                .simultaneousGesture(
-                                    TapGesture().onEnded { rangeSelection = nil }
-                                )
+                                    )
+                                    .simultaneousGesture(TapGesture().onEnded { rangeSelection = nil })
                             }
                         }
 
@@ -623,50 +608,28 @@ struct ContentView: View {
                 .padding(.top, 6)
             }
             .overlay(alignment: .topTrailing) {
-                // 框选区间统计面板 —— 始终显示只要有框选
-                if rangeSelection != nil {
-                    if let stats = rangeStats {
-                        VStack(alignment: .trailing, spacing: 6) {
-                            HStack {
-                                Text("区间统计").font(.caption).bold()
-                                Spacer()
-                                Button("✕") { rangeSelection = nil }
-                                    .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
-                            }
-                            Divider()
-                            statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
-                            statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
-                            statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
-                            Divider()
-                            statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
-                            statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
+                if let stats = rangeStats {
+                    VStack(alignment: .trailing, spacing: 6) {
+                        HStack {
+                            Text("区间统计").font(.caption).bold()
+                            Spacer()
+                            Button("✕") { rangeSelection = nil }
+                                .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
                         }
-                        .padding(10)
-                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
-                        .cornerRadius(8)
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                        .frame(width: 200)
-                        .padding(8)
-                    } else {
-                        // 框选了但范围内无数据变化
-                        VStack(alignment: .trailing, spacing: 4) {
-                            HStack {
-                                Text("区间统计").font(.caption).bold()
-                                Spacer()
-                                Button("✕") { rangeSelection = nil }
-                                    .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
-                            }
-                            Divider()
-                            Text("该区间内无数据变化")
-                                .font(.caption).foregroundStyle(.secondary)
-                        }
-                        .padding(10)
-                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
-                        .cornerRadius(8)
-                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                        .frame(width: 200)
-                        .padding(8)
+                        Divider()
+                        statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
+                        statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
+                        statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
+                        Divider()
+                        statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
+                        statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
                     }
+                    .padding(10)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                    .cornerRadius(8)
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .frame(width: 200)
+                    .padding(8)
                 }
             }
         }
