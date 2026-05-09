@@ -560,8 +560,17 @@ struct ContentView: View {
                         }
                         .chartOverlay { chartProxy in
                             GeometryReader { overlayGeo in
-                                // 解析绘图区 frame（排除 Y 轴区域）
-                                let plotFrame: CGRect = chartProxy.plotFrame.map { overlayGeo[$0] } ?? overlayGeo.frame(in: .local)
+                                // 解析绘图区 frame
+                                let plotFrame: CGRect = {
+                                    if let anchor = chartProxy.plotFrame {
+                                        return overlayGeo[anchor]
+                                    }
+                                    // fallback: 估算 Y 轴宽 ~70px
+                                    var f = overlayGeo.frame(in: .local)
+                                    f.origin.x += 70
+                                    f.size.width -= 70
+                                    return f
+                                }()
 
                                 Color.clear
                                     .contentShape(Rectangle())
@@ -570,17 +579,14 @@ struct ContentView: View {
                                             .onChanged { value in
                                                 isDraggingRange = true
                                                 guard plotFrame.width > 0 else { return }
-                                                // 钳制到绘图区
                                                 let x1 = min(plotFrame.maxX, max(plotFrame.minX, value.startLocation.x))
                                                 let x2 = min(plotFrame.maxX, max(plotFrame.minX, value.location.x))
-                                                // 绘图区内百分比 → 连续日期
-                                                let r1 = (x1 - plotFrame.minX) / plotFrame.width
-                                                let r2 = (x2 - plotFrame.minX) / plotFrame.width
-                                                let domain = currentChartDomain
-                                                let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
-                                                let s = domain.lowerBound.addingTimeInterval(r1 * dur)
-                                                let e = domain.lowerBound.addingTimeInterval(r2 * dur)
-                                                rangeSelection = min(s, e)...max(s, e)
+                                                // 用 chartProxy 把屏幕坐标直接转为日期
+                                                let s: Date? = chartProxy.value(atX: x1)
+                                                let e: Date? = chartProxy.value(atX: x2)
+                                                if let s, let e {
+                                                    rangeSelection = min(s, e)...max(s, e)
+                                                }
                                             }
                                         .onEnded { _ in isDraggingRange = false }
                                 )
