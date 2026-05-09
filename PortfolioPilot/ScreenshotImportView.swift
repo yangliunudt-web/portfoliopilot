@@ -304,31 +304,36 @@ struct ScreenshotImportView: View {
         defer { isAuthenticating = false }
 
         let context = LAContext()
-        let reason = "使用 Apple Watch 验证身份以识别持仓截图"
+        // 隐藏"输入密码"按钮，强制用 Apple Watch 或 Touch ID
+        context.localizedFallbackTitle = ""
+        context.localizedCancelTitle = "取消"
 
-        // 1. 优先 Apple Watch
         var error: NSError?
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithWatch, error: &error) {
-            do {
-                return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithWatch, localizedReason: reason)
-            } catch {
-                await MainActor.run { errorMessage = "Apple Watch 验证取消或超时" }
-                return false
-            }
+        // deviceOwnerAuthentication 在 macOS 上依次尝试 Apple Watch → Touch ID
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            // 无任何生物认证设备，直接放行
+            print("[Auth] No biometric/watch available: \(error?.localizedDescription ?? "")")
+            return true
         }
 
-        // 2. 其次 Touch ID
-        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
-            do {
-                return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "使用 Touch ID 验证身份")
-            } catch {
-                await MainActor.run { errorMessage = "Touch ID 验证取消" }
-                return false
+        do {
+            return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "验证身份以使用 AI 截图识别")
+        } catch let laErr as LAError {
+            switch laErr.code {
+            case .userCancel, .systemCancel:
+                await MainActor.run { errorMessage = "验证已取消" }
+            case .userFallback:
+                await MainActor.run { errorMessage = "" }
+            default:
+                print("[Auth] LAError: \(laErr.code.rawValue) — \(laErr.localizedDescription)")
+                await MainActor.run { errorMessage = "" }
             }
+            return false
+        } catch {
+            print("[Auth] Error: \(error)")
+            await MainActor.run { errorMessage = "" }
+            return false
         }
-
-        // 3. 都没有则直接放行（Mac mini 等无传感器设备）
-        return true
     }
 
     // MARK: - 逻辑

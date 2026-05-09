@@ -24,6 +24,7 @@ struct SettingsView: View {
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
     @State private var apiKeyInput = ""
+    @State private var keyRevealed = false
     @State private var testResult: String?
 
     var totalTarget: Double { bondTarget + nasdaqTarget + goldTarget + csiTarget + cashTarget }
@@ -83,7 +84,6 @@ struct SettingsView: View {
             }
             .alert("导入成功", isPresented: $showImportSuccess) { Button("OK") { dismiss() } }
         }.frame(minWidth: 450, minHeight: 650)
-        .onAppear { apiKeyInput = KeychainManager.load(key: "ai_api_key") ?? "" }
     }
 
     @ViewBuilder
@@ -244,18 +244,35 @@ struct SettingsView: View {
             HStack {
                 Text("API Key")
                 Spacer()
-                SecureField("sk-...", text: $apiKeyInput)
-                    .multilineTextAlignment(.trailing)
-                    .textFieldStyle(.roundedBorder)
-                    .frame(width: 260)
-                    .font(.caption)
-                    .onChange(of: apiKeyInput) { _, newValue in
-                        if newValue.isEmpty {
-                            KeychainManager.delete(key: "ai_api_key")
-                        } else {
-                            KeychainManager.save(key: "ai_api_key", value: newValue)
+                if keyRevealed {
+                    TextField("sk-...", text: $apiKeyInput)
+                        .multilineTextAlignment(.trailing)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                        .font(.caption)
+                        .onChange(of: apiKeyInput) { _, newValue in
+                            if newValue.isEmpty {
+                                KeychainManager.delete(key: "ai_api_key")
+                            } else {
+                                KeychainManager.save(key: "ai_api_key", value: newValue)
+                            }
                         }
-                    }
+                    Button("隐藏") {
+                        keyRevealed = false
+                        apiKeyInput = ""
+                    }.font(.caption2)
+                } else {
+                    SecureField("已保存（隐藏）", text: .constant(""))
+                        .multilineTextAlignment(.trailing)
+                        .textFieldStyle(.roundedBorder)
+                        .frame(width: 220)
+                        .font(.caption)
+                        .disabled(true)
+                    Button("显示") {
+                        apiKeyInput = KeychainManager.load(key: "ai_api_key") ?? ""
+                        keyRevealed = true
+                    }.font(.caption2)
+                }
             }
             HStack {
                 Spacer()
