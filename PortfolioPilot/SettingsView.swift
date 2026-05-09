@@ -136,14 +136,14 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var autoBackupSection: some View {
-        Section("自动备份") {
-            Toggle("启用自动快照", isOn: Binding(
+        Section {
+            Toggle("启用自动备份", isOn: Binding(
                 get: { autoSaveManager.autoSaveEnabled },
                 set: { autoSaveManager.autoSaveEnabled = $0 }
             ))
             if autoSaveManager.autoSaveEnabled {
                 HStack {
-                    Text("快照间隔")
+                    Text("静默等待时长")
                     Spacer()
                     Picker("", selection: Binding(
                         get: { autoSaveManager.autoSaveIntervalMinutes },
@@ -158,38 +158,40 @@ struct SettingsView: View {
                     .pickerStyle(.menu)
                     .frame(width: 120)
                 }
-                Toggle("同步导出到磁盘", isOn: Binding(
+                Toggle("同时导出文件", isOn: Binding(
                     get: { autoSaveManager.autoBackupEnabled },
                     set: { autoSaveManager.autoBackupEnabled = $0 }
                 ))
                 if autoSaveManager.autoBackupEnabled {
-                    HStack {
-                        Text("备份目录")
-                        Spacer()
-                        Button(autoSaveManager.autoBackupDirectory.isEmpty ? "选择文件夹..." : URL(fileURLWithPath: autoSaveManager.autoBackupDirectory).lastPathComponent) {
-                            selectBackupDirectory()
+                    VStack(alignment: .leading, spacing: 4) {
+                        HStack {
+                            Text("备份目录")
+                            Spacer()
+                            Button("选择文件夹...") { selectBackupDirectory() }
+                                .font(.caption)
                         }
-                        .font(.caption)
+                        Text(autoSaveManager.autoBackupDirectory)
+                            .font(.caption2)
+                            .foregroundStyle(.secondary)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
                     }
                 }
             }
             if let lastSave = autoSaveManager.lastAutoSaveTime {
                 HStack {
-                    Text("上次快照")
+                    Text("上次备份")
                     Spacer()
                     Text(lastSave, format: .dateTime.month().day().hour().minute().second())
                         .font(.caption)
                         .foregroundStyle(.secondary)
                 }
             }
-            if let lastBackup = autoSaveManager.lastBackupTime {
-                HStack {
-                    Text("上次文件备份")
-                    Spacer()
-                    Text(lastBackup, format: .dateTime.month().day().hour().minute().second())
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
+        } header: {
+            Text("自动备份")
+        } footer: {
+            if autoSaveManager.autoSaveEnabled {
+                Text("检测到数据变更后，静默等待上述时长，期间无新变更则自动执行一次备份。手动保存快照或执行资金调度时会立即备份。")
             }
         }
     }
