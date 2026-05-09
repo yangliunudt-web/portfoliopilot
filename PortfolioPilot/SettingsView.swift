@@ -1,11 +1,13 @@
 import SwiftUI
 import SwiftData
 import UniformTypeIdentifiers
+import AppKit
 
 struct SettingsView: View {
     @Environment(\.dismiss) var dismiss; @Environment(\.modelContext) private var modelContext
     @Query(sort: \PortfolioRecord.date, order: .reverse) private var allHistory: [PortfolioRecord]
     var resetAction: () -> Void
+    var autoSaveManager: AutoSaveManager
 
     @AppStorage("portfolioAssetsV3") private var assetList = AssetList(items: [])
     @AppStorage("totalUserPrincipal") private var totalUserPrincipal: Double = 0
@@ -28,6 +30,7 @@ struct SettingsView: View {
                 addAssetSection
                 manageAssetsSection
                 thresholdSection
+                autoBackupSection
                 dataManagementSection
             }
             .formStyle(.grouped).navigationTitle("设置").toolbar { ToolbarItem { Button("完成") { dismiss() } } }
@@ -128,6 +131,78 @@ struct SettingsView: View {
         Section("再平衡阈值") {
             HStack { Text("重仓绝对阈值"); Spacer(); Text(absThreshold, format: .percent).foregroundStyle(.secondary); Stepper("", value: $absThreshold, in: 0...1, step: 0.01).labelsHidden() }
             HStack { Text("轻仓相对阈值"); Spacer(); Text(relThreshold, format: .percent).foregroundStyle(.secondary); Stepper("", value: $relThreshold, in: 0...1, step: 0.05).labelsHidden() }
+        }
+    }
+
+    @ViewBuilder
+    private var autoBackupSection: some View {
+        Section("自动备份") {
+            Toggle("启用自动快照", isOn: Binding(
+                get: { autoSaveManager.autoSaveEnabled },
+                set: { autoSaveManager.autoSaveEnabled = $0 }
+            ))
+            if autoSaveManager.autoSaveEnabled {
+                HStack {
+                    Text("快照间隔")
+                    Spacer()
+                    Picker("", selection: Binding(
+                        get: { autoSaveManager.autoSaveIntervalMinutes },
+                        set: { autoSaveManager.autoSaveIntervalMinutes = $0 }
+                    )) {
+                        Text("5 分钟").tag(5)
+                        Text("10 分钟").tag(10)
+                        Text("15 分钟").tag(15)
+                        Text("30 分钟").tag(30)
+                        Text("60 分钟").tag(60)
+                    }
+                    .pickerStyle(.menu)
+                    .frame(width: 120)
+                }
+                Toggle("同步导出到磁盘", isOn: Binding(
+                    get: { autoSaveManager.autoBackupEnabled },
+                    set: { autoSaveManager.autoBackupEnabled = $0 }
+                ))
+                if autoSaveManager.autoBackupEnabled {
+                    HStack {
+                        Text("备份目录")
+                        Spacer()
+                        Button(autoSaveManager.autoBackupDirectory.isEmpty ? "选择文件夹..." : URL(fileURLWithPath: autoSaveManager.autoBackupDirectory).lastPathComponent) {
+                            selectBackupDirectory()
+                        }
+                        .font(.caption)
+                    }
+                }
+            }
+            if let lastSave = autoSaveManager.lastAutoSaveTime {
+                HStack {
+                    Text("上次快照")
+                    Spacer()
+                    Text(lastSave, format: .dateTime.month().day().hour().minute().second())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+            if let lastBackup = autoSaveManager.lastBackupTime {
+                HStack {
+                    Text("上次文件备份")
+                    Spacer()
+                    Text(lastBackup, format: .dateTime.month().day().hour().minute().second())
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+            }
+        }
+    }
+
+    private func selectBackupDirectory() {
+        let panel = NSOpenPanel()
+        panel.canChooseDirectories = true
+        panel.canChooseFiles = false
+        panel.canCreateDirectories = true
+        panel.prompt = "选择备份目录"
+        panel.message = "自动备份文件将保存到此目录"
+        if panel.runModal() == .OK, let url = panel.url {
+            autoSaveManager.autoBackupDirectory = url.path
         }
     }
 

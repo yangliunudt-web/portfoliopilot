@@ -41,6 +41,8 @@ struct ContentView: View {
     @State private var customStartDate: Date = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
     @State private var customEndDate: Date = Date()
 
+    @State private var autoSaveManager = AutoSaveManager()
+
     enum OperationMode: String, CaseIterable {
         case invest = "追加投资"
         case withdraw = "资金提现"
@@ -160,7 +162,10 @@ struct ContentView: View {
         } detail: {
             detailContent
         }
-        .onAppear { migrateOldDataIfNeeded() }
+        .onAppear {
+            migrateOldDataIfNeeded()
+            autoSaveManager.modelContext = modelContext
+        }
     }
 
     // MARK: - 侧边栏
@@ -173,7 +178,7 @@ struct ContentView: View {
         .formStyle(.grouped)
         .navigationSplitViewColumnWidth(min: 320, ideal: 380)
         .toolbar { ToolbarItem(placement: .primaryAction) { Button(action: { showSettings = true }) { Label("设置", systemImage: "gearshape") } } }
-        .sheet(isPresented: $showSettings) { SettingsView(resetAction: resetAllData) }
+        .sheet(isPresented: $showSettings) { SettingsView(resetAction: resetAllData, autoSaveManager: autoSaveManager) }
     }
 
     private var fundingSection: some View {
@@ -231,7 +236,18 @@ struct ContentView: View {
                 Text("外部总投入").bold(); Spacer()
                 Text(totalUserPrincipal, format: .currency(code: "CNY")).font(.body.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4).background(Color(nsColor: .controlBackgroundColor).opacity(0.5)).cornerRadius(4)
             }
-            Button("保存快照") { saveRecord() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).padding(.top, 5)
+            Button("保存快照") { saveRecord(); autoSaveManager.notifyManualSave() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).padding(.top, 5)
+
+            if autoSaveManager.autoSaveEnabled, let lastTime = autoSaveManager.lastAutoSaveTime {
+                HStack(spacing: 4) {
+                    Image(systemName: "clock.arrow.2.circlepath")
+                        .font(.caption2)
+                    Text("上次自动备份: \(lastTime, format: .dateTime.hour().minute().second())")
+                        .font(.caption2)
+                }
+                .foregroundStyle(.secondary)
+                .padding(.top, 4)
+            }
         }
     }
 
@@ -646,7 +662,7 @@ struct ContentView: View {
             if operationMode == .invest { totalUserPrincipal = ((totalUserPrincipal + roundedAmt) * 100).rounded() / 100 }
             else { totalUserPrincipal = ((totalUserPrincipal - roundedAmt) * 100).rounded() / 100 }
         }
-        saveRecord(); inputAmount = nil; calculationResult = nil; rebalancePlan = nil
+        saveRecord(); autoSaveManager.notifyManualSave(); inputAmount = nil; calculationResult = nil; rebalancePlan = nil
     }
 
     func checkRebalanceNeed(total: Double) -> (isNeeded: Bool, messages: [String]) {
