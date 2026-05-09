@@ -513,7 +513,7 @@ struct ContentView: View {
                             Color.clear
                                 .contentShape(Rectangle())
                                 .gesture(
-                                    DragGesture(minimumDistance: 5)
+                                    DragGesture(minimumDistance: 2) // 极短距离即可触发
                                         .onChanged { value in
                                             isDraggingRange = true
                                             let xPos = value.startLocation.x
@@ -531,14 +531,16 @@ struct ContentView: View {
                                         }
                                         .onEnded { _ in
                                             isDraggingRange = false
-                                            if let r = rangeSelection, r.upperBound.timeIntervalSince(r.lowerBound) < 60 {
-                                                rangeSelection = nil
-                                            }
                                         }
+                                )
+                                .simultaneousGesture(
+                                    TapGesture().onEnded {
+                                        rangeSelection = nil
+                                    }
                                 )
                         }
 
-                        // 拖动实时标签
+                        // 拖动日期标签
                         if isDraggingRange, let r = rangeSelection {
                             Text("\(r.lowerBound, format: .dateTime.month().day()) — \(r.upperBound, format: .dateTime.month().day())")
                                 .font(.system(size: 10).monospacedDigit())
@@ -551,54 +553,50 @@ struct ContentView: View {
                 }
                 .frame(height: 350)
 
-                // 图例
-                HStack(spacing: 20) {
+                // 底部：图例 + 区间收益率
+                HStack {
                     HStack(spacing: 4) {
-                        Capsule().fill(catColor).frame(width: 16, height: 3)
+                        Capsule().fill(catColor).frame(width: 14, height: 3)
                         Text("市值").font(.caption2).foregroundStyle(.secondary)
                     }
                     HStack(spacing: 4) {
-                        Capsule().fill(.gray.opacity(0.6)).frame(width: 16, height: 2)
+                        Capsule().fill(.gray.opacity(0.6)).frame(width: 14, height: 2)
                         Text("本金").font(.caption2).foregroundStyle(.secondary)
                     }
-                    if let f = firstPoint, f.principal > 0 {
-                        Text("区间收益率: \(totalChange >= 0 ? "+" : "")\(totalChange * 100, specifier: "%.2f")%")
-                            .font(.caption2).bold()
-                            .foregroundStyle(totalChange >= 0 ? .red : .green)
-                    }
                     Spacer()
-                    Text("拖拽时间轴框选区间")
-                        .font(.system(size: 9))
-                        .foregroundStyle(.gray.opacity(0.5))
+                    if let stats = rangeStats {
+                        Text("框选区间: \(stats.start.date, format: .dateTime.month().day()) → \(stats.end.date, format: .dateTime.month().day())")
+                            .font(.system(size: 9)).foregroundStyle(.blue)
+                    } else {
+                        Text("拖拽框选区间 · 点击清除")
+                            .font(.system(size: 9)).foregroundStyle(.gray.opacity(0.4))
+                    }
                 }
                 .padding(.top, 6)
             }
             .overlay(alignment: .topTrailing) {
+                // 框选区间统计面板
                 if let stats = rangeStats {
                     VStack(alignment: .trailing, spacing: 6) {
                         HStack {
-                            Image(systemName: "hand.draw").font(.caption2).foregroundStyle(.blue)
                             Text("区间统计").font(.caption).bold()
                             Spacer()
-                            Button("×") { rangeSelection = nil }
-                                .font(.caption).foregroundStyle(.secondary)
-                                .buttonStyle(.plain)
+                            Button("✕") { rangeSelection = nil }
+                                .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
                         }
                         Divider()
-                        Group {
-                            statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
-                            statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
-                            statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
-                            statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
-                        }
-                        Text("\(stats.start.date, format: .dateTime.month().day().hour().minute()) → \(stats.end.date, format: .dateTime.month().day().hour().minute())")
-                            .font(.system(size: 10)).foregroundStyle(.secondary)
+                        statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
+                        statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
+                        statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
+                        Divider()
+                        statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
+                        statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
                     }
                     .padding(10)
                     .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
                     .cornerRadius(8)
                     .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    .frame(width: 220)
+                    .frame(width: 200)
                     .padding(8)
                 }
             }

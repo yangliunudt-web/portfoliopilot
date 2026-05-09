@@ -25,7 +25,6 @@ struct SettingsView: View {
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
     @State private var apiKeyInput = ""
     @State private var keyRevealed = false
-    @State private var keyLoaded = false  // 防止加载 Key 时触发 onChange 保存
     @State private var testResult: String?
 
     var totalTarget: Double { bondTarget + nasdaqTarget + goldTarget + csiTarget + cashTarget }
@@ -245,38 +244,25 @@ struct SettingsView: View {
             HStack {
                 Text("API Key")
                 Spacer()
-                if keyRevealed {
-                    TextField("sk-...", text: $apiKeyInput)
-                        .multilineTextAlignment(.trailing)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
-                        .font(.caption)
-                        .onChange(of: apiKeyInput) { _, newValue in
-                            guard keyLoaded else { keyLoaded = true; return }
-                            if newValue.isEmpty {
-                                KeychainManager.delete(key: "ai_api_key")
-                            } else {
-                                KeychainManager.save(key: "ai_api_key", value: newValue)
-                            }
+                SecureField("点击「查看」以显示", text: $apiKeyInput)
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 200)
+                    .font(.caption)
+                    .disabled(!keyRevealed)
+                Button(keyRevealed ? "保存" : "查看") {
+                    if keyRevealed {
+                        if apiKeyInput.isEmpty {
+                            KeychainManager.delete(key: "ai_api_key")
+                        } else {
+                            KeychainManager.save(key: "ai_api_key", value: apiKeyInput)
                         }
-                    Button("隐藏") {
                         keyRevealed = false
-                        keyLoaded = false
-                        apiKeyInput = ""
-                    }.font(.caption2)
-                } else {
-                    SecureField("已保存（隐藏）", text: .constant(""))
-                        .multilineTextAlignment(.trailing)
-                        .textFieldStyle(.roundedBorder)
-                        .frame(width: 220)
-                        .font(.caption)
-                        .disabled(true)
-                    Button("显示") {
+                    } else {
                         apiKeyInput = KeychainManager.load(key: "ai_api_key") ?? ""
-                        keyLoaded = false  // 阻止 onChange 触发保存
                         keyRevealed = true
-                    }.font(.caption2)
-                }
+                    }
+                }.font(.caption2)
             }
             HStack {
                 Spacer()

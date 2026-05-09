@@ -1,7 +1,6 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
-import LocalAuthentication
 
 struct ScreenshotImportView: View {
     @Environment(\.dismiss) private var dismiss
@@ -18,7 +17,6 @@ struct ScreenshotImportView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var stage: Stage = .input
-    @State private var isAuthenticating = false
 
     enum Stage { case input, preview }
 
@@ -299,31 +297,6 @@ struct ScreenshotImportView: View {
         return charRatio >= 0.65
     }
 
-    // MARK: - Touch ID 认证
-
-    private func authenticateWithWatch() async -> Bool {
-        guard !isAuthenticating else { return false }
-        isAuthenticating = true
-        defer { isAuthenticating = false }
-
-        let context = LAContext()
-        context.localizedFallbackTitle = ""   // 不显示密码回退按钮
-        context.localizedCancelTitle = "取消"
-
-        var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            // 无 Touch ID，直接放行
-            return true
-        }
-
-        do {
-            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "使用 Touch ID 验证身份")
-        } catch {
-            await MainActor.run { errorMessage = "Touch ID 验证取消" }
-            return false
-        }
-    }
-
     // MARK: - 逻辑
 
     private func analyzeImage() {
@@ -331,12 +304,6 @@ struct ScreenshotImportView: View {
         isLoading = true; errorMessage = nil
 
         Task {
-            // 1. Touch ID 验证（无传感器的直接通过）
-            guard await authenticateWithWatch() else {
-                await MainActor.run { isLoading = false }
-                return
-            }
-            // 2. 读取 KeyChain 中的 API Key
             let key = KeychainManager.load(key: "ai_api_key") ?? ""
             guard !key.isEmpty else {
                 await MainActor.run {
@@ -346,7 +313,6 @@ struct ScreenshotImportView: View {
                 return
             }
 
-            // 3. 调用 AI
             do {
                 let analyzer = ScreenshotAnalyzer(baseURL: aiBaseURL, apiKey: key, model: aiModel)
                 let result = try await analyzer.analyze(image: image)
