@@ -431,11 +431,11 @@ struct ContentView: View {
             let domainMax = maxY
 
             let lastPoint = points.last
-            // 跳过起始零点（单类资产早期可能无数据），用第一个非零点做基线
+            // 跳过起始零点，用第一个非零点做基线
             let firstPoint = points.first(where: { $0.value > 0 })
             let totalChange: Double = {
-                guard let f = firstPoint, let l = lastPoint else { return 0 }
-                if f.principal > 0 {
+                guard let f = firstPoint, let l = lastPoint, f.value != l.value else { return 0 }
+                if f.principal > 0 && f.principal != l.principal {
                     return (l.value / l.principal) - (f.value / f.principal)
                 } else {
                     return (l.value / f.value) - 1
