@@ -127,12 +127,6 @@ struct ContentView: View {
             points.append(ChartDataPoint(date: domain.upperBound, value: last.value, principal: last.principal))
         }
 
-        // 一次性 dump 所有数据点
-        let _ = print("[DataPoints] count=\(points.count)")
-        for (i, p) in points.enumerated() {
-            let _ = print("[DataPoints]   [\(i)] \(p.date.formatted(.iso8601)) v=\(Int(p.value)) p=\(Int(p.principal))")
-        }
-
         return points
     }
 
@@ -149,29 +143,14 @@ struct ContentView: View {
         let points = chartDataPoints
         guard points.count >= 2 else { return nil }
 
-        // 找区间内数据点；若无，用区间前后的点跨越空白间隙
-        let startIdx = points.firstIndex(where: { $0.date >= range.lowerBound })
-        let endIdx = points.lastIndex(where: { $0.date <= range.upperBound })
-
-        let baselineIdx: Int
-        let endpointIdx: Int
-
-        if let si = startIdx, let ei = endIdx, si <= ei {
-            baselineIdx = max(0, si - 1)
-            endpointIdx = ei
-        } else {
-            let beforeIdx = points.lastIndex(where: { $0.date < range.lowerBound })
-            let afterIdx = points.firstIndex(where: { $0.date > range.upperBound })
-            let _ = print("[Stats] GAP: startIdx=\(startIdx.map(String.init) ?? "nil") endIdx=\(endIdx.map(String.init) ?? "nil") before=\(beforeIdx.map(String.init) ?? "nil") after=\(afterIdx.map(String.init) ?? "nil") range=\(range.lowerBound.formatted(.iso8601))~\(range.upperBound.formatted(.iso8601))")
-            guard let bi = beforeIdx, let ai = afterIdx, bi != ai else { return nil }
-            baselineIdx = bi
-            endpointIdx = ai
-        }
+        // 找区间前后最近的数据点（确保一定有结果）
+        let beforeIdx = points.lastIndex(where: { $0.date <= range.lowerBound }) ?? 0
+        let afterIdx = points.firstIndex(where: { $0.date >= range.upperBound }) ?? (points.count - 1)
+        let baselineIdx = max(0, beforeIdx)
+        let endpointIdx = min(points.count - 1, afterIdx)
 
         let startPoint = points[baselineIdx]
         let endPoint = points[endpointIdx]
-
-        guard baselineIdx != endpointIdx else { return nil }
 
         let valueChange = endPoint.value - startPoint.value
         let principalChange = endPoint.principal - startPoint.principal
