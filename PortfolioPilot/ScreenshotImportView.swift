@@ -142,7 +142,7 @@ struct ScreenshotImportView: View {
     private var matchedCount: Int {
         detectedAssets.filter { detected in
             assetList.items.contains { existing in
-                existing.name.localizedCaseInsensitiveContains(detected.name) || detected.name.localizedCaseInsensitiveContains(existing.name)
+                isAssetNameMatch(existing.name, detected.name)
             }
         }.count
     }
@@ -177,7 +177,7 @@ struct ScreenshotImportView: View {
                 VStack(spacing: 8) {
                     ForEach(detectedAssets) { asset in
                         let matched = assetList.items.first { existing in
-                            existing.name.localizedCaseInsensitiveContains(asset.name) || asset.name.localizedCaseInsensitiveContains(existing.name)
+                            isAssetNameMatch(existing.name, asset.name)
                         }
                         DetectedAssetRow(asset: asset, matchedExisting: matched)
                     }
@@ -258,6 +258,44 @@ struct ScreenshotImportView: View {
         }
     }
 
+    // MARK: - 模糊匹配
+
+    /// 判断两个资产名称是否指向同一个资产，支持字号差异、空格、标点等变化
+    private func isAssetNameMatch(_ a: String, _ b: String) -> Bool {
+        // 归一化：去空格、去标点、小写
+        let normalize: (String) -> String = { str in
+            str.lowercased()
+                .replacingOccurrences(of: " ", with: "")
+                .replacingOccurrences(of: "(", with: "")
+                .replacingOccurrences(of: ")", with: "")
+                .replacingOccurrences(of: "（", with: "")
+                .replacingOccurrences(of: "）", with: "")
+                .replacingOccurrences(of: "-", with: "")
+                .replacingOccurrences(of: "_", with: "")
+                .replacingOccurrences(of: "·", with: "")
+        }
+        let na = normalize(a)
+        let nb = normalize(b)
+
+        // 完全一致或包含关系直接命中
+        if na == nb || na.contains(nb) || nb.contains(na) { return true }
+
+        // 字符 bigram Jaccard 相似度
+        func bigrams(_ s: String) -> Set<String> {
+            let chars = Array(s)
+            guard chars.count >= 2 else { return [s] }
+            return Set(stride(from: 0, to: chars.count - 1, by: 1).map { String(chars[$0...$0+1]) })
+        }
+        let bgA = bigrams(na)
+        let bgB = bigrams(nb)
+        guard !bgA.isEmpty, !bgB.isEmpty else { return false }
+        let intersection = bgA.intersection(bgB)
+        let union = bgA.union(bgB)
+        let jaccard = Double(intersection.count) / Double(union.count)
+
+        return jaccard >= 0.55
+    }
+
     // MARK: - 逻辑
 
     private func analyzeImage() {
@@ -286,8 +324,7 @@ struct ScreenshotImportView: View {
         for detected in detectedAssets {
             // 名称模糊匹配现有资产
             if let idx = assetList.items.firstIndex(where: {
-                $0.name.localizedCaseInsensitiveContains(detected.name) ||
-                detected.name.localizedCaseInsensitiveContains($0.name)
+                isAssetNameMatch($0.name, detected.name)
             }) {
                 let oldPrin = assetList.items[idx].principal
                 assetList.items[idx].value = detected.value
