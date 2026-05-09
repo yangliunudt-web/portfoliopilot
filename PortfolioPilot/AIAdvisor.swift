@@ -29,32 +29,32 @@ struct AIAdvisor {
         for cat in categories {
             let pct = totalValue > 0 ? cat.value / totalValue : 0
             let deviation = pct - cat.targetRatio
+            let overThreshold = abs(deviation) > (cat.targetRatio >= 0.20 ? absThreshold : absThreshold * cat.targetRatio / 0.20)
             categoryLines += """
-            - \(cat.name): 市值 ¥\(String(format: "%.0f", cat.value)), 占 \(String(format: "%.1f", pct * 100))% (目标 \(String(format: "%.1f", cat.targetRatio * 100))%), 偏离 \(String(format: "%+.1f", deviation * 100))%
+            - \(cat.name): 占 \(String(format: "%.1f", pct * 100))% (目标 \(String(format: "%.1f", cat.targetRatio * 100))%), 偏离 \(String(format: "%+.1f", deviation * 100))%\(overThreshold ? " ⚠触发" : "")
             """
         }
 
         let prompt = """
-        你是仓位再平衡助手。核心原则：**每一分资金都要有去处，成对操作最快达到平衡**。
+        你是再平衡计算器。只处理标记了"触发"的品类，其他不动。
 
         \(categoryLines)
 
         总资产 ¥\(String(format: "%.0f", totalValue))
-        阈值：大仓位(≥20%)绝对偏离>\(String(format: "%.0f", absThreshold * 100))%触发，小仓位相对偏离>\(String(format: "%.0f", relThreshold * 100))%触发
+        阈值：大仓(≥20%目标)绝对偏离>\(String(format: "%.0f", absThreshold * 100))%，小仓相对偏离>\(String(format: "%.0f", relThreshold * 100))%
 
-        要求：
-        1. 找出正偏离最大（超配）和负偏离最大（低配）的品类
-        2. 建议：从超配品类减仓 → 加到低配品类，形成完整的资金流向
-        3. 调整后回到阈值以内即可，不必精确命中
-        4. 理由必须引用偏离数据，不对收益率做任何评价
+        严格执行：
+        1. 触发品类中，正偏离值最大的一个 = 减仓来源
+        2. 触发品类中，负偏离值最大的一个 = 加仓目标
+        3. 调整金额 = 总资产 × 偏离百分比 的绝对值
+        4. 成对输出：一侧减多少、另一侧加多少，金额一致
+        5. 不对收益率或市场行情做任何评价
 
-        回复格式：
-        减 [超配品类]：约¥xxx
-        加 [低配品类]：约¥xxx
-        理由：（偏离数据对比）
-        如全部在阈值内就说"当前无需调整"
-
-        60字以内。
+        回复：
+        减 [品类]：约¥xxx
+        加 [品类]：约¥xxx
+        无触发就说"当前无需调整"
+        40字以内。
         """
 
         let body: [String: Any] = [

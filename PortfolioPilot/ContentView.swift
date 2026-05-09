@@ -431,15 +431,23 @@ struct ContentView: View {
             let domainMax = maxY
 
             let lastPoint = points.last
-            // 跳过起始零点，用第一个非零点做基线
-            let firstPoint = points.first(where: { $0.value > 0 })
+            // 跳过连续相同值（回退数据），找第一个真正变化的点
+            let firstChangedPoint = points.first(where: { p in
+                guard p.value > 0 else { return false }
+                if let idx = points.firstIndex(where: { $0.id == p.id }), idx + 1 < points.count {
+                    return points[idx + 1].value != p.value
+                }
+                return true
+            })
+            let firstPoint = firstChangedPoint ?? points.first(where: { $0.value > 0 })
             let totalChange: Double = {
-                guard let f = firstPoint, let l = lastPoint, f.value != l.value else { return 0 }
+                guard let f = firstPoint, let l = lastPoint, abs(l.value - f.value) > 0.01 else { return 0 }
                 if f.principal > 0 && f.principal != l.principal {
                     return (l.value / l.principal) - (f.value / f.principal)
-                } else {
+                } else if f.value > 0 {
                     return (l.value / f.value) - 1
                 }
+                return 0
             }()
 
             VStack(spacing: 0) {
@@ -538,14 +546,17 @@ struct ContentView: View {
                             Color.clear
                                 .contentShape(Rectangle())
                                 .gesture(
-                                    DragGesture(minimumDistance: 2) // 极短距离即可触发
+                                    DragGesture(minimumDistance: 2)
                                         .onChanged { value in
                                             isDraggingRange = true
-                                            let xPos = value.startLocation.x
-                                            let delta = value.location.x - value.startLocation.x
-                                            let w = geometry.size.width
-                                            let nStart = max(0, min(1, xPos / w))
-                                            let nEnd = max(0, min(1, (xPos + delta) / w))
+                                            // 使用 chartProxy.plotFrame 解析到 geometry 坐标
+                                            guard let anchor = chartProxy.plotFrame else { return }
+                                            let resolvedFrame = geometry[anchor]
+                                            let xPos = value.startLocation.x - resolvedFrame.minX
+                                            let xEnd = value.location.x - resolvedFrame.minX
+                                            let plotWidth = resolvedFrame.width
+                                            let nStart = max(0, min(1, xPos / plotWidth))
+                                            let nEnd = max(0, min(1, xEnd / plotWidth))
 
                                             let domain = currentChartDomain
                                             let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
