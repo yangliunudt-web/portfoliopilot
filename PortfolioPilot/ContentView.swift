@@ -554,25 +554,25 @@ struct ContentView: View {
                                 .font(.system(size: 9))
                             }
                         }
-                        .chartOverlay { _ in
+                        .chartOverlay { chartProxy in
                             GeometryReader { geo in
+                                // 扣除 Y 轴宽度，只取绘图区百分比
+                                let plotOriginX: CGFloat = chartProxy.plotFrame.map { geo[$0].minX } ?? 37
+                                let plotWidth: CGFloat = chartProxy.plotFrame.map { geo[$0].width } ?? (geo.size.width - 37)
+
                                 Color.clear.contentShape(Rectangle())
                                     .gesture(
                                         DragGesture(minimumDistance: 2)
                                             .onChanged { value in
                                                 isDraggingRange = true
-                                                guard geo.size.width > 0 else { return }
-                                                let r1 = max(0, min(1, value.startLocation.x / geo.size.width))
-                                                let r2 = max(0, min(1, value.location.x / geo.size.width))
+                                                guard plotWidth > 0 else { return }
+                                                let r1 = max(0, min(1, (value.startLocation.x - plotOriginX) / plotWidth))
+                                                let r2 = max(0, min(1, (value.location.x - plotOriginX) / plotWidth))
                                                 let domain = currentChartDomain
                                                 let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
-                                                rangeSelection = min(
-                                                    domain.lowerBound.addingTimeInterval(r1 * dur),
-                                                    domain.lowerBound.addingTimeInterval(r2 * dur)
-                                                )...max(
-                                                    domain.lowerBound.addingTimeInterval(r1 * dur),
-                                                    domain.lowerBound.addingTimeInterval(r2 * dur)
-                                                )
+                                                let s = domain.lowerBound.addingTimeInterval(r1 * dur)
+                                                let e = domain.lowerBound.addingTimeInterval(r2 * dur)
+                                                rangeSelection = min(s, e)...max(s, e)
                                             }
                                         .onEnded { _ in isDraggingRange = false }
                                     )
