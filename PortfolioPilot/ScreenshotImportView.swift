@@ -252,7 +252,7 @@ struct ScreenshotImportView: View {
                 }
             }
             .padding(10)
-            .glassEffect()
+            .glassEffect(in: RoundedRectangle(cornerRadius: 12))
             .cornerRadius(8)
         }
     }

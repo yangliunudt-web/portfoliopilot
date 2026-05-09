@@ -14,7 +14,7 @@ struct DualInputRow: View {
 
             VStack(spacing: 6) {
                 HStack { Text("值").font(.caption).foregroundStyle(.secondary); TextField("", value: $value, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).multilineTextAlignment(.trailing).monospacedDigit() }.padding(6).background(Color(nsColor: .textBackgroundColor)).cornerRadius(6)
-                HStack { Text("本").font(.caption).foregroundStyle(.secondary); TextField("", value: $principal, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).multilineTextAlignment(.trailing).foregroundStyle(.secondary).monospacedDigit() }.padding(6).glassEffect().cornerRadius(6)
+                HStack { Text("本").font(.caption).foregroundStyle(.secondary); TextField("", value: $principal, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).multilineTextAlignment(.trailing).foregroundStyle(.secondary).monospacedDigit() }.padding(6).glassEffect(in: RoundedRectangle(cornerRadius: 12)).cornerRadius(6)
             }
         }.padding(.vertical, 4)
     }
@@ -43,7 +43,7 @@ struct StatsDashboardView: View {
 
 struct StatCard: View {
     let title: String; let value: Double; var subText: String? = nil; var color: Color
-    var body: some View { VStack(alignment: .leading, spacing: 5) { Text(title).font(.caption).foregroundStyle(.secondary); Text(value, format: .currency(code: "CNY")).font(.title2).bold().foregroundStyle(color).monospacedDigit(); if let s = subText { Text(s).font(.caption).foregroundStyle(color.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 2).background(color.opacity(0.1)).cornerRadius(4) } }.frame(maxWidth: .infinity, alignment: .leading).padding().glassEffect().cornerRadius(12).shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1) }
+    var body: some View { VStack(alignment: .leading, spacing: 5) { Text(title).font(.caption).foregroundStyle(.secondary); Text(value, format: .currency(code: "CNY")).font(.title2).bold().foregroundStyle(color).monospacedDigit(); if let s = subText { Text(s).font(.caption).foregroundStyle(color.opacity(0.8)).padding(.horizontal, 6).padding(.vertical, 2).background(color.opacity(0.1)).cornerRadius(4) } }.frame(maxWidth: .infinity, alignment: .leading).padding().glassEffect(in: RoundedRectangle(cornerRadius: 12)).cornerRadius(12).shadow(color: .black.opacity(0.05), radius: 2, x: 0, y: 1) }
 }
 
 struct StrategyPreviewCard: View {

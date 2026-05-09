@@ -223,7 +223,7 @@ struct ContentView: View {
                 TextField("金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).font(.title2)
                     .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
                     .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
-            }.padding(10).glassEffect()
+            }.padding(10).glassEffect(in: RoundedRectangle(cornerRadius: 12))
 
             if let result = calculationResult, let amount = inputAmount, amount > 0 {
                 StrategyPreviewCard(
@@ -280,7 +280,7 @@ struct ContentView: View {
             Divider()
             HStack {
                 Text("外部总投入").bold(); Spacer()
-                Text(totalUserPrincipal, format: .currency(code: "CNY")).font(.body.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4).glassEffect().cornerRadius(4)
+                Text(totalUserPrincipal, format: .currency(code: "CNY")).font(.body.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4).glassEffect(in: RoundedRectangle(cornerRadius: 8))
             }
             Button("保存快照") { saveRecord(); autoSaveManager.saveImmediately() }.buttonStyle(.glassProminent).frame(maxWidth: .infinity).padding(.top, 5)
 
@@ -376,7 +376,7 @@ struct ContentView: View {
                     }
                 }
             }
-        }.padding().glassEffect().cornerRadius(12).frame(maxWidth: 320)
+        }.padding().glassEffect(in: RoundedRectangle(cornerRadius: 12)).frame(maxWidth: 320)
     }
 
     // MARK: - 折线图
@@ -388,7 +388,7 @@ struct ContentView: View {
             timeRangePicker
         }
         .padding()
-        .glassEffect()
+        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
         .cornerRadius(12)
         .frame(maxWidth: .infinity)
     }
@@ -721,7 +721,7 @@ struct ContentView: View {
             }
         }
         .padding()
-        .glassEffect()
+        .glassEffect(in: RoundedRectangle(cornerRadius: 12))
         .cornerRadius(10)
     }
 
