@@ -561,13 +561,18 @@ struct ContentView: View {
                                         DragGesture(minimumDistance: 2)
                                             .onChanged { value in
                                                 isDraggingRange = true
-                                                let pts = chartDataPoints
-                                                guard pts.count >= 2, geo.size.width > 0 else { return }
+                                                guard geo.size.width > 0 else { return }
                                                 let r1 = max(0, min(1, value.startLocation.x / geo.size.width))
                                                 let r2 = max(0, min(1, value.location.x / geo.size.width))
-                                                let i1 = Int(r1 * Double(pts.count - 1))
-                                                let i2 = Int(r2 * Double(pts.count - 1))
-                                                rangeSelection = min(pts[i1].date, pts[i2].date)...max(pts[i1].date, pts[i2].date)
+                                                let domain = currentChartDomain
+                                                let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
+                                                rangeSelection = min(
+                                                    domain.lowerBound.addingTimeInterval(r1 * dur),
+                                                    domain.lowerBound.addingTimeInterval(r2 * dur)
+                                                )...max(
+                                                    domain.lowerBound.addingTimeInterval(r1 * dur),
+                                                    domain.lowerBound.addingTimeInterval(r2 * dur)
+                                                )
                                             }
                                         .onEnded { _ in isDraggingRange = false }
                                     )
