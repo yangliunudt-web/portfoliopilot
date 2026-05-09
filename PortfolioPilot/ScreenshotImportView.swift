@@ -260,9 +260,8 @@ struct ScreenshotImportView: View {
 
     // MARK: - 模糊匹配
 
-    /// 判断两个资产名称是否指向同一个资产，支持字号差异、空格、标点等变化
+    /// 判断两个资产名称是否指向同一个资产
     private func isAssetNameMatch(_ a: String, _ b: String) -> Bool {
-        // 归一化：去空格、去标点、小写
         let normalize: (String) -> String = { str in
             str.lowercased()
                 .replacingOccurrences(of: " ", with: "")
@@ -273,27 +272,31 @@ struct ScreenshotImportView: View {
                 .replacingOccurrences(of: "-", with: "")
                 .replacingOccurrences(of: "_", with: "")
                 .replacingOccurrences(of: "·", with: "")
+                .replacingOccurrences(of: "联接", with: "")
+                .replacingOccurrences(of: "指数", with: "")
+                .replacingOccurrences(of: "基金", with: "")
+                .replacingOccurrences(of: "etf", with: "")
+                .replacingOccurrences(of: "lof", with: "")
+                .replacingOccurrences(of: "a类", with: "")
+                .replacingOccurrences(of: "c类", with: "")
+                .replacingOccurrences(of: "a", with: "")
+                .replacingOccurrences(of: "c", with: "")
         }
         let na = normalize(a)
         let nb = normalize(b)
 
-        // 完全一致或包含关系直接命中
+        // 完全相同或包含关系
         if na == nb || na.contains(nb) || nb.contains(na) { return true }
 
-        // 字符 bigram Jaccard 相似度
-        func bigrams(_ s: String) -> Set<String> {
-            let chars = Array(s)
-            guard chars.count >= 2 else { return [s] }
-            return Set(stride(from: 0, to: chars.count - 1, by: 1).map { String(chars[$0...$0+1]) })
-        }
-        let bgA = bigrams(na)
-        let bgB = bigrams(nb)
-        guard !bgA.isEmpty, !bgB.isEmpty else { return false }
-        let intersection = bgA.intersection(bgB)
-        let union = bgA.union(bgB)
-        let jaccard = Double(intersection.count) / Double(union.count)
+        // 字符公共比例：共同字符数 / 较短字符串长度
+        let setA = Set(na)
+        let setB = Set(nb)
+        let common = setA.intersection(setB)
+        let minLen = Double(min(na.count, nb.count))
+        let charRatio = minLen > 0 ? Double(common.count) / minLen : 0
 
-        return jaccard >= 0.55
+        // 如果公共字符超过 65%，判定匹配
+        return charRatio >= 0.65
     }
 
     // MARK: - Touch ID 认证
@@ -366,8 +369,11 @@ struct ScreenshotImportView: View {
             if let idx = assetList.items.firstIndex(where: {
                 isAssetNameMatch($0.name, detected.name)
             }) {
-                // 匹配到的资产：只更新市值，保留用户原有的本金
+                // 匹配到的资产：更新市值和本金（本金 = 市值 - 持有收益）
+                let oldPrin = assetList.items[idx].principal
                 assetList.items[idx].value = detected.value
+                assetList.items[idx].principal = detected.principal
+                totalUserPrincipal = ((totalUserPrincipal - oldPrin + detected.principal) * 100).rounded() / 100
             } else {
                 // 新资产：全量添加
                 assetList.items.append(AssetItem(name: detected.name, category: detected.category, value: detected.value, principal: detected.principal))
