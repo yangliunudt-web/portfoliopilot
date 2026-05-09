@@ -567,16 +567,15 @@ struct ContentView: View {
                                         DragGesture(minimumDistance: 2)
                                             .onChanged { value in
                                                 isDraggingRange = true
-                                                let pts = chartDataPoints
-                                                guard pts.count >= 2 else { return }
                                                 let w = overlayGeo.size.width
+                                                guard w > 0 else { return }
+                                                // 连续百分比映射到连续日期，Range 是平滑的
                                                 let r1 = max(0, min(1, value.startLocation.x / w))
                                                 let r2 = max(0, min(1, value.location.x / w))
-                                                // 百分比直接映射到数据点索引，不做日期转换
-                                                let i1 = Int(r1 * Double(pts.count - 1))
-                                                let i2 = Int(r2 * Double(pts.count - 1))
-                                                let s = pts[i1].date
-                                                let e = pts[i2].date
+                                                let domain = currentChartDomain
+                                                let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
+                                                let s = domain.lowerBound.addingTimeInterval(r1 * dur)
+                                                let e = domain.lowerBound.addingTimeInterval(r2 * dur)
                                                 rangeSelection = min(s, e)...max(s, e)
                                             }
                                         .onEnded { _ in
