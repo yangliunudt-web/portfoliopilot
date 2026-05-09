@@ -125,7 +125,7 @@ struct ScreenshotImportView: View {
                     }
                     .frame(minWidth: 160)
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
                 .disabled(image == nil)
                 .font(.title3)
 
@@ -194,7 +194,7 @@ struct ScreenshotImportView: View {
                     applyChanges()
                     dismiss()
                 }
-                .buttonStyle(.borderedProminent)
+                .buttonStyle(.glassProminent)
             }
         }
         .padding(24)
@@ -252,7 +252,7 @@ struct ScreenshotImportView: View {
                 }
             }
             .padding(10)
-            .background(Color(nsColor: .controlBackgroundColor))
+            .glassEffect()
             .cornerRadius(8)
         }
     }

@@ -223,7 +223,7 @@ struct ContentView: View {
                 TextField("金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).font(.title2)
                     .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
                     .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
-            }.padding(10).background(Color(nsColor: .controlBackgroundColor)).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
+            }.padding(10).glassEffect()
 
             if let result = calculationResult, let amount = inputAmount, amount > 0 {
                 StrategyPreviewCard(
@@ -280,9 +280,9 @@ struct ContentView: View {
             Divider()
             HStack {
                 Text("外部总投入").bold(); Spacer()
-                Text(totalUserPrincipal, format: .currency(code: "CNY")).font(.body.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4).background(Color(nsColor: .controlBackgroundColor).opacity(0.5)).cornerRadius(4)
+                Text(totalUserPrincipal, format: .currency(code: "CNY")).font(.body.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4).glassEffect().cornerRadius(4)
             }
-            Button("保存快照") { saveRecord(); autoSaveManager.saveImmediately() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).padding(.top, 5)
+            Button("保存快照") { saveRecord(); autoSaveManager.saveImmediately() }.buttonStyle(.glassProminent).frame(maxWidth: .infinity).padding(.top, 5)
 
             if autoSaveManager.autoSaveEnabled, let lastTime = autoSaveManager.lastAutoSaveTime {
                 HStack(spacing: 4) {
@@ -376,7 +376,7 @@ struct ContentView: View {
                     }
                 }
             }
-        }.padding().background(Color(nsColor: .controlBackgroundColor)).cornerRadius(12).frame(maxWidth: 320)
+        }.padding().glassEffect().cornerRadius(12).frame(maxWidth: 320)
     }
 
     // MARK: - 折线图
@@ -388,7 +388,7 @@ struct ContentView: View {
             timeRangePicker
         }
         .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
+        .glassEffect()
         .cornerRadius(12)
         .frame(maxWidth: .infinity)
     }
@@ -721,7 +721,7 @@ struct ContentView: View {
             }
         }
         .padding()
-        .background(Color(nsColor: .controlBackgroundColor))
+        .glassEffect()
         .cornerRadius(10)
     }
 

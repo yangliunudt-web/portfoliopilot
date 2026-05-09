@@ -121,7 +121,7 @@ struct SettingsView: View {
                     assetList.items.append(AssetItem(name: newAssetName, category: newAssetCategory, value: rValue, principal: rPrin))
                     totalUserPrincipal = ((totalUserPrincipal + rPrin) * 100).rounded() / 100
                     newAssetName = ""; newAssetValue = nil; newAssetPrincipal = nil
-                }.buttonStyle(.borderedProminent).disabled(newAssetName.isEmpty)
+                }.buttonStyle(.glassProminent).disabled(newAssetName.isEmpty)
             }
         }
     }
