@@ -280,7 +280,14 @@ struct SettingsView: View {
         testResult = nil
         Task {
             do {
-                let url = URL(string: "\(aiBaseURL.hasSuffix("/") ? String(aiBaseURL.dropLast()) : aiBaseURL)/chat/completions")!
+                let base = aiBaseURL.hasSuffix("/") ? String(aiBaseURL.dropLast()) : aiBaseURL
+                guard let url = URL(string: "\(base)/chat/completions") else {
+                    await MainActor.run { testResult = "无效的 API 地址" }
+                    return
+                }
+                print("[AI Test] URL: \(url.absoluteString)")
+                print("[AI Test] Model: \(aiModel)")
+
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
@@ -292,12 +299,30 @@ struct SettingsView: View {
                     "max_tokens": 10
                 ]
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
-                let (_, response) = try await URLSession.shared.data(for: request)
+
+                let (data, response) = try await URLSession.shared.data(for: request)
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                let respBody = String(data: data, encoding: .utf8) ?? ""
+                print("[AI Test] Status: \(code), Body: \(respBody.prefix(300))")
+
                 await MainActor.run {
-                    testResult = code == 200 ? "连接成功" : "HTTP \(code)"
+                    if code == 200 {
+                        testResult = "连接成功"
+                    } else {
+                        // 提取 API 返回的错误信息
+                        let errorMsg: String
+                        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+                           let err = json["error"] as? [String: Any],
+                           let msg = err["message"] as? String {
+                            errorMsg = msg
+                        } else {
+                            errorMsg = respBody.isEmpty ? "HTTP \(code)" : String(respBody.prefix(100))
+                        }
+                        testResult = "HTTP \(code): \(errorMsg)"
+                    }
                 }
             } catch {
+                print("[AI Test] Error: \(error)")
                 await MainActor.run {
                     testResult = "连接失败: \(error.localizedDescription)"
                 }
