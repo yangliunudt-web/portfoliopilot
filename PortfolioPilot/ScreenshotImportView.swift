@@ -130,7 +130,7 @@ struct ScreenshotImportView: View {
                 .disabled(image == nil)
                 .font(.title3)
 
-                Text("将使用 Apple Watch 或 Touch ID 验证身份")
+                Text("将使用 Touch ID 验证身份")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
@@ -296,7 +296,7 @@ struct ScreenshotImportView: View {
         return jaccard >= 0.55
     }
 
-    // MARK: - Apple Watch / Touch ID 认证
+    // MARK: - Touch ID 认证
 
     private func authenticateWithWatch() async -> Bool {
         guard !isAuthenticating else { return false }
@@ -304,34 +304,19 @@ struct ScreenshotImportView: View {
         defer { isAuthenticating = false }
 
         let context = LAContext()
-        // 隐藏"输入密码"按钮，强制用 Apple Watch 或 Touch ID
-        context.localizedFallbackTitle = ""
+        context.localizedFallbackTitle = ""   // 不显示密码回退按钮
         context.localizedCancelTitle = "取消"
 
         var error: NSError?
-        // deviceOwnerAuthentication 在 macOS 上依次尝试 Apple Watch → Touch ID
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            // 无任何生物认证设备，直接放行
-            print("[Auth] No biometric/watch available: \(error?.localizedDescription ?? "")")
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            // 无 Touch ID，直接放行
             return true
         }
 
         do {
-            return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "验证身份以使用 AI 截图识别")
-        } catch let laErr as LAError {
-            switch laErr.code {
-            case .userCancel, .systemCancel:
-                await MainActor.run { errorMessage = "验证已取消" }
-            case .userFallback:
-                await MainActor.run { errorMessage = "" }
-            default:
-                print("[Auth] LAError: \(laErr.code.rawValue) — \(laErr.localizedDescription)")
-                await MainActor.run { errorMessage = "" }
-            }
-            return false
+            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "使用 Touch ID 验证身份")
         } catch {
-            print("[Auth] Error: \(error)")
-            await MainActor.run { errorMessage = "" }
+            await MainActor.run { errorMessage = "Touch ID 验证取消" }
             return false
         }
     }
@@ -343,7 +328,7 @@ struct ScreenshotImportView: View {
         isLoading = true; errorMessage = nil
 
         Task {
-            // 1. Apple Watch / Touch ID 验证（无传感器的直接通过）
+            // 1. Touch ID 验证（无传感器的直接通过）
             guard await authenticateWithWatch() else {
                 await MainActor.run { isLoading = false }
                 return
