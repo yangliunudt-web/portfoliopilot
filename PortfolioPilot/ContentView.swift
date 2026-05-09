@@ -143,20 +143,30 @@ struct ContentView: View {
         let points = chartDataPoints
         guard points.count >= 2 else { return nil }
 
-        guard let startIdx = points.firstIndex(where: { $0.date >= range.lowerBound }),
-              let endIdx = points.lastIndex(where: { $0.date <= range.upperBound }),
-              startIdx <= endIdx else {
-            let _ = print("[StatsDebug] No match: range=\(range.lowerBound.formatted(.iso8601))~\(range.upperBound.formatted(.iso8601))")
-            return nil
+        // 找区间内数据点；若无，用区间前后的点跨越空白间隙
+        let startIdx = points.firstIndex(where: { $0.date >= range.lowerBound })
+        let endIdx = points.lastIndex(where: { $0.date <= range.upperBound })
+
+        let baselineIdx: Int
+        let endpointIdx: Int
+
+        if let si = startIdx, let ei = endIdx, si <= ei {
+            // 正常：区间内有数据点
+            baselineIdx = max(0, si - 1)
+            endpointIdx = ei
+        } else {
+            // 区间内无数据点（空白间隙）：用区间前后最近的点跨越间隙
+            let beforeIdx = points.lastIndex(where: { $0.date < range.lowerBound }) ?? 0
+            let afterIdx = points.firstIndex(where: { $0.date > range.upperBound }) ?? (points.count - 1)
+            guard beforeIdx != afterIdx else { return nil }
+            baselineIdx = beforeIdx
+            endpointIdx = afterIdx
         }
 
-        let baselineIdx = max(0, startIdx - 1)
         let startPoint = points[baselineIdx]
-        let endPoint = points[endIdx]
+        let endPoint = points[endpointIdx]
 
-        let _ = print("[StatsDebug] baseline[\(baselineIdx)]=\(startPoint.date.formatted(.iso8601)) v=\(Int(startPoint.value)), end[\(endIdx)]=\(endPoint.date.formatted(.iso8601)) v=\(Int(endPoint.value)), change=\(Int(endPoint.value - startPoint.value))")
-
-        guard baselineIdx != endIdx else { return nil }
+        guard baselineIdx != endpointIdx else { return nil }
 
         let valueChange = endPoint.value - startPoint.value
         let principalChange = endPoint.principal - startPoint.principal
@@ -562,20 +572,12 @@ struct ContentView: View {
                         }
                         .chartOverlay { chartProxy in
                             GeometryReader { overlayGeo in
-                                let hasPlotAnchor = chartProxy.plotFrame != nil
-                                // 一次性打印图表元信息
-                                let _ = print("[DragDebug] plotFrame: \(hasPlotAnchor ? "OK" : "NIL"), overlay: \(overlayGeo.size.width)x\(overlayGeo.size.height), domain: \(currentChartDomain.lowerBound.formatted(.iso8601)) ~ \(currentChartDomain.upperBound.formatted(.iso8601)), dataPoints: \(chartDataPoints.count)")
-
-                                // 解析绘图区
                                 let plotFrame: CGRect = {
                                     if let anchor = chartProxy.plotFrame {
-                                        let f = overlayGeo[anchor]
-                                        let _ = print("[DragDebug] plotFrame resolved: origin=\(f.origin), size=\(f.size)")
-                                        return f
+                                        return overlayGeo[anchor]
                                     }
                                     var f = overlayGeo.frame(in: .local)
                                     f.origin.x += 70; f.size.width -= 70
-                                    let _ = print("[DragDebug] plotFrame FALLBACK: origin=\(f.origin), size=\(f.size)")
                                     return f
                                 }()
 
@@ -590,32 +592,16 @@ struct ContentView: View {
                                                 let x2 = min(plotFrame.maxX, max(plotFrame.minX, value.location.x))
                                                 let r1 = (x1 - plotFrame.minX) / plotFrame.width
                                                 let r2 = (x2 - plotFrame.minX) / plotFrame.width
-
-                                                // 同时试两种方法，对比结果
                                                 let domain = currentChartDomain
                                                 let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
-                                                let sManual = domain.lowerBound.addingTimeInterval(r1 * dur)
-                                                let eManual = domain.lowerBound.addingTimeInterval(r2 * dur)
-                                                let sProxy: Date? = chartProxy.value(atX: x1)
-                                                let eProxy: Date? = chartProxy.value(atX: x2)
-
-                                                let _ = print("[DragDebug] x1=\(Int(x1))→r1=\(String(format:"%.3f",r1)) manual=\(sManual.formatted(.iso8601)) proxy=\(sProxy?.formatted(.iso8601) ?? "nil") | x2=\(Int(x2))→r2=\(String(format:"%.3f",r2)) manual=\(eManual.formatted(.iso8601)) proxy=\(eProxy?.formatted(.iso8601) ?? "nil")")
-
-                                                // 优先用 proxy，失败则用 manual
-                                                let s = sProxy ?? sManual
-                                                let e = eProxy ?? eManual
+                                                let s = domain.lowerBound.addingTimeInterval(r1 * dur)
+                                                let e = domain.lowerBound.addingTimeInterval(r2 * dur)
                                                 rangeSelection = min(s, e)...max(s, e)
                                             }
-                                        .onEnded { _ in
-                                            isDraggingRange = false
-                                            let _ = print("[DragDebug] --- drag ended ---")
-                                        }
+                                        .onEnded { _ in isDraggingRange = false }
                                 )
                                 .simultaneousGesture(
-                                    TapGesture().onEnded {
-                                        rangeSelection = nil
-                                        let _ = print("[DragDebug] --- tap cleared ---")
-                                    }
+                                    TapGesture().onEnded { rangeSelection = nil }
                                 )
                             }
                         }
