@@ -127,6 +127,12 @@ struct ContentView: View {
             points.append(ChartDataPoint(date: domain.upperBound, value: last.value, principal: last.principal))
         }
 
+        // 一次性 dump 所有数据点
+        let _ = print("[DataPoints] count=\(points.count)")
+        for (i, p) in points.enumerated() {
+            let _ = print("[DataPoints]   [\(i)] \(p.date.formatted(.iso8601)) v=\(Int(p.value)) p=\(Int(p.principal))")
+        }
+
         return points
     }
 
@@ -151,16 +157,15 @@ struct ContentView: View {
         let endpointIdx: Int
 
         if let si = startIdx, let ei = endIdx, si <= ei {
-            // 正常：区间内有数据点
             baselineIdx = max(0, si - 1)
             endpointIdx = ei
         } else {
-            // 区间内无数据点（空白间隙）：用区间前后最近的点跨越间隙
-            let beforeIdx = points.lastIndex(where: { $0.date < range.lowerBound }) ?? 0
-            let afterIdx = points.firstIndex(where: { $0.date > range.upperBound }) ?? (points.count - 1)
-            guard beforeIdx != afterIdx else { return nil }
-            baselineIdx = beforeIdx
-            endpointIdx = afterIdx
+            let beforeIdx = points.lastIndex(where: { $0.date < range.lowerBound })
+            let afterIdx = points.firstIndex(where: { $0.date > range.upperBound })
+            let _ = print("[Stats] GAP: startIdx=\(startIdx.map(String.init) ?? "nil") endIdx=\(endIdx.map(String.init) ?? "nil") before=\(beforeIdx.map(String.init) ?? "nil") after=\(afterIdx.map(String.init) ?? "nil") range=\(range.lowerBound.formatted(.iso8601))~\(range.upperBound.formatted(.iso8601))")
+            guard let bi = beforeIdx, let ai = afterIdx, bi != ai else { return nil }
+            baselineIdx = bi
+            endpointIdx = ai
         }
 
         let startPoint = points[baselineIdx]
