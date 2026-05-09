@@ -293,41 +293,74 @@ struct SettingsView: View {
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
                 request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
                 request.timeoutInterval = 15
+
+                // GLM-5V-Turbo 是视觉模型，需要携带图片才能正常响应
+                let tinyPNG = "iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNk+M9QDwADhgGAWjR9awAAAABJRU5ErkJggg=="
                 let body: [String: Any] = [
                     "model": aiModel,
-                    "messages": [["role": "user", "content": "回复 OK"]],
-                    "max_tokens": 10
+                    "messages": [
+                        [
+                            "role": "user",
+                            "content": [
+                                ["type": "text", "text": "回复 OK"],
+                                ["type": "image_url", "image_url": ["url": tinyPNG]]
+                            ]
+                        ]
+                    ],
+                    "max_tokens": 20
                 ]
                 request.httpBody = try JSONSerialization.data(withJSONObject: body)
 
                 let (data, response) = try await URLSession.shared.data(for: request)
                 let code = (response as? HTTPURLResponse)?.statusCode ?? 0
                 let respBody = String(data: data, encoding: .utf8) ?? ""
-                print("[AI Test] Status: \(code), Body: \(respBody.prefix(300))")
+                print("[AI Test] Status: \(code), Body: \(respBody.prefix(500))")
 
                 await MainActor.run {
                     if code == 200 {
-                        testResult = "连接成功"
+                        testResult = "连接成功，模型正常响应"
                     } else {
-                        // 提取 API 返回的错误信息
-                        let errorMsg: String
-                        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
-                           let err = json["error"] as? [String: Any],
-                           let msg = err["message"] as? String {
-                            errorMsg = msg
-                        } else {
-                            errorMsg = respBody.isEmpty ? "HTTP \(code)" : String(respBody.prefix(100))
-                        }
-                        testResult = "HTTP \(code): \(errorMsg)"
+                        let msg = extractAPIError(from: data, body: respBody, code: code)
+                        testResult = msg
                     }
                 }
             } catch {
                 print("[AI Test] Error: \(error)")
+                let msg = error.localizedDescription
                 await MainActor.run {
-                    testResult = "连接失败: \(error.localizedDescription)"
+                    if let urlErr = error as? URLError, urlErr.code == .cannotFindHost {
+                        testResult = "无法解析 API 地址，请检查域名"
+                    } else if let urlErr = error as? URLError, urlErr.code == .secureConnectionFailed {
+                        testResult = "SSL/TLS 连接失败，请检查 API 地址是否为 https"
+                    } else if error.localizedDescription.contains("cancelled") {
+                        testResult = "连接超时，请检查网络或 API 地址"
+                    } else {
+                        testResult = "连接失败: \(msg)"
+                    }
                 }
             }
         }
+    }
+
+    private func extractAPIError(from data: Data, body: String, code: Int) -> String {
+        // 优先解析 JSON 中的错误字段
+        if let json = try? JSONSerialization.jsonObject(with: data) as? [String: Any] {
+            if let err = json["error"] as? [String: Any], let msg = err["message"] as? String {
+                return "\(msg)"
+            }
+            if let err = json["error"] as? String {
+                return "\(err)"
+            }
+            if let msg = json["msg"] as? String {
+                return "\(msg)"
+            }
+            if let message = json["message"] as? String {
+                return "\(message)"
+            }
+        }
+        // 回退
+        if body.isEmpty { return "HTTP \(code) — 无响应内容" }
+        return "HTTP \(code): \(String(body.prefix(200)))"
     }
 
     @ViewBuilder
