@@ -206,6 +206,7 @@ struct ContentView: View {
                 let diff = roundedNewValue - assetList.items[idx].principal
                 assetList.items[idx].principal = roundedNewValue
                 totalUserPrincipal = ((totalUserPrincipal + diff) * 100).rounded() / 100
+                autoSaveManager.notifyDataChanged()
             }
         )
     }
@@ -213,7 +214,11 @@ struct ContentView: View {
     func valueBinding(for id: UUID) -> Binding<Double> {
         Binding<Double>(
             get: { guard let idx = assetList.items.firstIndex(where: { $0.id == id }) else { return 0 }; return assetList.items[idx].value },
-            set: { newValue in guard let idx = assetList.items.firstIndex(where: { $0.id == id }) else { return }; assetList.items[idx].value = (newValue * 100).rounded() / 100 }
+            set: { newValue in
+                guard let idx = assetList.items.firstIndex(where: { $0.id == id }) else { return }
+                assetList.items[idx].value = (newValue * 100).rounded() / 100
+                autoSaveManager.notifyDataChanged()
+            }
         )
     }
 
@@ -236,7 +241,7 @@ struct ContentView: View {
                 Text("外部总投入").bold(); Spacer()
                 Text(totalUserPrincipal, format: .currency(code: "CNY")).font(.body.monospacedDigit()).foregroundStyle(.secondary).padding(.horizontal, 8).padding(.vertical, 4).background(Color(nsColor: .controlBackgroundColor).opacity(0.5)).cornerRadius(4)
             }
-            Button("保存快照") { saveRecord(); autoSaveManager.notifyManualSave() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).padding(.top, 5)
+            Button("保存快照") { saveRecord(); autoSaveManager.saveImmediately() }.buttonStyle(.borderedProminent).frame(maxWidth: .infinity).padding(.top, 5)
 
             if autoSaveManager.autoSaveEnabled, let lastTime = autoSaveManager.lastAutoSaveTime {
                 HStack(spacing: 4) {
@@ -662,7 +667,7 @@ struct ContentView: View {
             if operationMode == .invest { totalUserPrincipal = ((totalUserPrincipal + roundedAmt) * 100).rounded() / 100 }
             else { totalUserPrincipal = ((totalUserPrincipal - roundedAmt) * 100).rounded() / 100 }
         }
-        saveRecord(); autoSaveManager.notifyManualSave(); inputAmount = nil; calculationResult = nil; rebalancePlan = nil
+        saveRecord(); autoSaveManager.saveImmediately(); inputAmount = nil; calculationResult = nil; rebalancePlan = nil
     }
 
     func checkRebalanceNeed(total: Double) -> (isNeeded: Bool, messages: [String]) {

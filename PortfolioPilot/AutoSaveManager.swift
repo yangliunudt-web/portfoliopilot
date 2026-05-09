@@ -4,10 +4,10 @@ import SwiftData
 @Observable
 final class AutoSaveManager {
     var autoSaveEnabled: Bool {
-        didSet { UserDefaults.standard.set(autoSaveEnabled, forKey: "autoSaveEnabled"); handleToggle() }
+        didSet { UserDefaults.standard.set(autoSaveEnabled, forKey: "autoSaveEnabled") }
     }
     var autoSaveIntervalMinutes: Int {
-        didSet { UserDefaults.standard.set(autoSaveIntervalMinutes, forKey: "autoSaveIntervalMinutes"); restartTimer() }
+        didSet { UserDefaults.standard.set(autoSaveIntervalMinutes, forKey: "autoSaveIntervalMinutes") }
     }
     var autoBackupEnabled: Bool {
         didSet { UserDefaults.standard.set(autoBackupEnabled, forKey: "autoBackupEnabled") }
@@ -24,50 +24,44 @@ final class AutoSaveManager {
 
     var modelContext: ModelContext?
 
-    private var timer: Timer?
+    private var debounceTimer: Timer?
+
+    private static func defaultBackupDir() -> String {
+        let docs = FileManager.default.urls(for: .documentDirectory, in: .userDomainMask).first!
+        return docs.appendingPathComponent("PortfolioPilot/backups").path
+    }
 
     init() {
         self.autoSaveEnabled = UserDefaults.standard.bool(forKey: "autoSaveEnabled")
         let interval = UserDefaults.standard.integer(forKey: "autoSaveIntervalMinutes")
         self.autoSaveIntervalMinutes = interval > 0 ? interval : 15
         self.autoBackupEnabled = UserDefaults.standard.bool(forKey: "autoBackupEnabled")
-        self.autoBackupDirectory = UserDefaults.standard.string(forKey: "autoBackupDirectory") ?? ""
+        let savedDir = UserDefaults.standard.string(forKey: "autoBackupDirectory") ?? ""
+        self.autoBackupDirectory = savedDir.isEmpty ? Self.defaultBackupDir() : savedDir
         self.lastAutoSaveTime = UserDefaults.standard.object(forKey: "lastAutoSaveTime") as? Date
         self.lastBackupTime = UserDefaults.standard.object(forKey: "lastBackupTime") as? Date
-
-        if autoSaveEnabled { startTimer() }
     }
 
-    func notifyManualSave() {
-        lastAutoSaveTime = Date()
-    }
-
-    func handleToggle() {
-        if autoSaveEnabled { startTimer() } else { stopTimer() }
-    }
-
-    private func startTimer() {
-        stopTimer()
+    /// 数据发生变更时调用，重置防抖计时器
+    func notifyDataChanged() {
+        guard autoSaveEnabled else { return }
+        debounceTimer?.invalidate()
         let interval = max(1, autoSaveIntervalMinutes)
-        timer = Timer.scheduledTimer(withTimeInterval: TimeInterval(interval * 60), repeats: true) { [weak self] _ in
-            guard let self else { return }
-            self.performAutoBackup()
+        debounceTimer = Timer.scheduledTimer(withTimeInterval: TimeInterval(interval * 60), repeats: false) { [weak self] _ in
+            self?.performAutoBackup()
         }
     }
 
-    private func stopTimer() {
-        timer?.invalidate()
-        timer = nil
+    /// 手动保存/操作执行后立即备份，同时取消防抖等待
+    func saveImmediately() {
+        debounceTimer?.invalidate()
+        debounceTimer = nil
+        performAutoBackup()
     }
 
-    private func restartTimer() {
-        if autoSaveEnabled { startTimer() }
-    }
-
-    func performAutoBackup() {
+    private func performAutoBackup() {
         guard let ctx = modelContext else { return }
 
-        // 从 UserDefaults 读取当前资产数据
         let assetRaw = UserDefaults.standard.string(forKey: "portfolioAssetsV3") ?? "[]"
         guard let assetList = AssetList(rawValue: assetRaw) else { return }
         let totalPrinc = UserDefaults.standard.double(forKey: "totalUserPrincipal")
@@ -75,7 +69,6 @@ final class AutoSaveManager {
         let totalValue = assetList.items.reduce(0.0) { $0 + $1.value }
         guard totalValue > 0 else { return }
 
-        // 构建快照
         var snap: [String: Double] = [:]
         for item in assetList.items { snap[item.id.uuidString] = (item.value * 100).rounded() / 100 }
         for cat in AssetCategory.allCases {
@@ -90,7 +83,7 @@ final class AutoSaveManager {
         ctx.insert(PortfolioRecord(date: Date(), totalValue: recordTotal, principal: recordPrincipal, assetSnapshot: snap))
         lastAutoSaveTime = Date()
 
-        if autoBackupEnabled, !autoBackupDirectory.isEmpty {
+        if autoBackupEnabled {
             performFileExport(assetRaw: assetRaw, totalPrinc: totalPrinc)
         }
     }
@@ -98,6 +91,8 @@ final class AutoSaveManager {
     func performFileExport(assetRaw: String? = nil, totalPrinc: Double? = nil) {
         let dir = autoBackupDirectory
         guard !dir.isEmpty else { return }
+
+        ensureDirectoryExists(dir)
 
         let formatter = DateFormatter()
         formatter.dateFormat = "yyyy-MM-dd_HH-mm-ss"
@@ -123,6 +118,11 @@ final class AutoSaveManager {
         }
     }
 
+    private func ensureDirectoryExists(_ path: String) {
+        let url = URL(fileURLWithPath: path)
+        try? FileManager.default.createDirectory(at: url, withIntermediateDirectories: true)
+    }
+
     private func cleanupOldBackups(in directory: String) {
         let dirURL = URL(fileURLWithPath: directory)
         guard let files = try? FileManager.default.contentsOfDirectory(at: dirURL, includingPropertiesForKeys: [.creationDateKey]) else { return }
@@ -142,6 +142,6 @@ final class AutoSaveManager {
     }
 
     deinit {
-        stopTimer()
+        debounceTimer?.invalidate()
     }
 }
