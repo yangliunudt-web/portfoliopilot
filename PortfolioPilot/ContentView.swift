@@ -44,6 +44,12 @@ struct ContentView: View {
 
     @State private var autoSaveManager = AutoSaveManager()
 
+    // AI 投资建议
+    @State private var aiAdvice: String?
+    @State private var isLoadingAdvice = false
+    @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
+    @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
+
     enum OperationMode: String, CaseIterable {
         case invest = "追加投资"
         case withdraw = "资金提现"
@@ -275,6 +281,7 @@ struct ContentView: View {
                 if currentTotalValue > 0 {
                     let check = checkRebalanceNeed(total: currentTotalValue)
                     if check.isNeeded { RebalanceAlertView(messages: check.messages) { prepareRebalancePlan() } }
+                    aiAdviceCard
                 }
                 HStack(alignment: .top, spacing: 20) {
                     pieChartSection
@@ -645,6 +652,91 @@ struct ContentView: View {
             Spacer()
         }
         .padding(.top, 5)
+    }
+
+    // MARK: - AI 投资建议
+
+    private var aiAdviceCard: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack {
+                Image(systemName: "sparkles").foregroundStyle(.purple)
+                Text("AI 投资建议").font(.headline)
+                Spacer()
+            }
+
+            if let advice = aiAdvice {
+                Text(advice)
+                    .font(.callout)
+                    .foregroundStyle(.primary)
+                    .padding(10)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+                    .background(Color.purple.opacity(0.05))
+                    .cornerRadius(8)
+            }
+
+            if isLoadingAdvice {
+                HStack(spacing: 8) {
+                    ProgressView().scaleEffect(0.8)
+                    Text("AI 思考中...").font(.caption).foregroundStyle(.secondary)
+                }
+            } else {
+                Button(action: fetchAIAdvice) {
+                    HStack(spacing: 4) {
+                        Image(systemName: "brain")
+                        Text(aiAdvice == nil ? "获取 AI 投资建议" : "刷新建议")
+                    }
+                }
+                .buttonStyle(.bordered)
+                .font(.caption)
+            }
+        }
+        .padding()
+        .background(Color(nsColor: .controlBackgroundColor))
+        .cornerRadius(10)
+    }
+
+    private func fetchAIAdvice() {
+        guard currentTotalValue > 0 else { return }
+        isLoadingAdvice = true
+        aiAdvice = nil
+
+        let key = KeychainManager.load(key: "ai_api_key") ?? ""
+        guard !key.isEmpty else {
+            aiAdvice = "请先在设置中配置 AI API Key"
+            isLoadingAdvice = false
+            return
+        }
+
+        let categories: [CategoryState] = AssetCategory.allCases.map { cat in
+            let items = assetList.items.filter { $0.category == cat }
+            let val = items.reduce(0) { $0 + $1.value }
+            let prin = items.reduce(0) { $0 + $1.principal }
+            return CategoryState(name: cat.rawValue, value: val, principal: prin, targetRatio: targetRatio(for: cat))
+        }
+
+        Task {
+            do {
+                let result = try await AIAdvisor.getAdvice(
+                    totalValue: currentTotalValue,
+                    totalPrincipal: totalUserPrincipal,
+                    categories: categories,
+                    absThreshold: absThreshold,
+                    relThreshold: relThreshold,
+                    apiBaseURL: aiBaseURL,
+                    apiKey: key,
+                    model: aiModel
+                )
+                await MainActor.run {
+                    aiAdvice = result
+                    isLoadingAdvice = false
+                }
+            } catch {
+                await MainActor.run {
+                    aiAdvice = "获取建议失败: \(error.localizedDescription)"
+                    isLoadingAdvice = false
+                }
+            }
+        }
     }
 
     // MARK: - 数据与逻辑
