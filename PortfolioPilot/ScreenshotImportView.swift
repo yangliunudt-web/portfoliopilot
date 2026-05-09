@@ -7,8 +7,8 @@ struct ScreenshotImportView: View {
 
     @AppStorage("portfolioAssetsV3") private var assetList = AssetList(items: [])
     @AppStorage("totalUserPrincipal") private var totalUserPrincipal: Double = 0
-    @AppStorage("aiBaseURL") private var aiBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    @AppStorage("aiModel") private var aiModel = "qwen-vl-max"
+    @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
+    @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
 
     @State private var image: NSImage?
     @State private var detectedAssets: [DetectedAsset] = []

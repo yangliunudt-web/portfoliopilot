@@ -21,8 +21,8 @@ struct SettingsView: View {
     @State private var newAssetValue: Double? = nil; @State private var newAssetPrincipal: Double? = nil
     @State private var assetToDelete: AssetItem? = nil
 
-    @AppStorage("aiBaseURL") private var aiBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
-    @AppStorage("aiModel") private var aiModel = "qwen-vl-max"
+    @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
+    @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
     @State private var apiKeyInput = ""
     @State private var testResult: String?
 
@@ -267,7 +267,7 @@ struct SettingsView: View {
         } header: {
             Text("AI 截图识别")
         } footer: {
-            Text("支持 OpenAI 兼容的视觉模型 API，如阿里通义千问 (qwen-vl-max)、智谱 GLM-4V 等。API Key 安全存储在系统钥匙串中。")
+            Text("当前默认使用智谱 GLM-4V-Turbo，也支持通义千问等 OpenAI 兼容接口。API Key 安全存储在系统钥匙串中。")
         }
     }
 
