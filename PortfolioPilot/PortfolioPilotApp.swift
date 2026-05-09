@@ -1,10 +1,3 @@
-//
-//  PortfolioPilotApp.swift
-//  PortfolioPilot
-//
-//  Created by Liuyang on 2026/1/18.
-//
-
 import SwiftUI
 import SwiftData
 
@@ -12,7 +5,8 @@ import SwiftData
 struct PortfolioPilotApp: App {
     var sharedModelContainer: ModelContainer = {
         let schema = Schema([
-            Item.self,
+            // 👇 这里必须改成 PortfolioRecord.self
+            PortfolioRecord.self,
         ])
         let modelConfiguration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: false)
 
