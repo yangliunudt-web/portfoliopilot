@@ -139,32 +139,47 @@ struct ScreenshotImportView: View {
 
     // MARK: - 预览页
 
+    private var matchedCount: Int {
+        detectedAssets.filter { detected in
+            assetList.items.contains { existing in
+                existing.name.localizedCaseInsensitiveContains(detected.name) || detected.name.localizedCaseInsensitiveContains(existing.name)
+            }
+        }.count
+    }
+    private var newCount: Int { detectedAssets.count - matchedCount }
+
     private var previewView: some View {
         VStack(alignment: .leading, spacing: 16) {
             Text("识别结果").font(.headline)
-            Text("共识别 \(detectedAssets.count) 项资产，请确认后更新").font(.caption).foregroundStyle(.secondary)
+
+            HStack(spacing: 16) {
+                if matchedCount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "arrow.triangle.2.circlepath").font(.caption)
+                        Text("\(matchedCount) 项匹配更新").font(.caption)
+                    }
+                    .foregroundStyle(.blue)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.blue.opacity(0.1)).cornerRadius(4)
+                }
+                if newCount > 0 {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle").font(.caption)
+                        Text("\(newCount) 项新增").font(.caption)
+                    }
+                    .foregroundStyle(.green)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                    .background(Color.green.opacity(0.1)).cornerRadius(4)
+                }
+            }
 
             ScrollView {
                 VStack(spacing: 8) {
                     ForEach(detectedAssets) { asset in
-                        HStack {
-                            Circle().fill(asset.category.color).frame(width: 10, height: 10)
-                            VStack(alignment: .leading) {
-                                Text(asset.name).font(.callout).bold()
-                                Text(asset.category.rawValue).font(.caption2).foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("市值: \(asset.value, format: .currency(code: "CNY"))")
-                                    .font(.callout).monospacedDigit()
-                                Text("本金: \(asset.principal, format: .currency(code: "CNY"))")
-                                    .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
-                            }
+                        let matched = assetList.items.first { existing in
+                            existing.name.localizedCaseInsensitiveContains(asset.name) || asset.name.localizedCaseInsensitiveContains(existing.name)
                         }
-                        .padding(.horizontal, 12)
-                        .padding(.vertical, 8)
-                        .background(Color(nsColor: .controlBackgroundColor))
-                        .cornerRadius(8)
+                        DetectedAssetRow(asset: asset, matchedExisting: matched)
                     }
                 }
             }
@@ -176,7 +191,7 @@ struct ScreenshotImportView: View {
                     stage = .input; detectedAssets = []; errorMessage = nil
                 }
                 Spacer()
-                Button("确认更新") {
+                Button("确认更新 (\(detectedAssets.count) 项)") {
                     applyChanges()
                     dismiss()
                 }
@@ -184,6 +199,63 @@ struct ScreenshotImportView: View {
             }
         }
         .padding(24)
+    }
+
+    struct DetectedAssetRow: View {
+        let asset: DetectedAsset
+        let matchedExisting: AssetItem?
+
+        var body: some View {
+            VStack(alignment: .leading, spacing: 6) {
+                HStack {
+                    Circle().fill(asset.category.color).frame(width: 10, height: 10)
+                    VStack(alignment: .leading) {
+                        Text(asset.name).font(.callout).bold()
+                        Text(asset.category.rawValue).font(.caption2).foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    VStack(alignment: .trailing, spacing: 2) {
+                        Text("市值: \(asset.value, format: .currency(code: "CNY"))")
+                            .font(.callout).monospacedDigit()
+                        Text("本金: \(asset.principal, format: .currency(code: "CNY"))")
+                            .font(.caption2).monospacedDigit().foregroundStyle(.secondary)
+                    }
+                }
+
+                if let existing = matchedExisting {
+                    HStack(spacing: 8) {
+                        Image(systemName: "arrow.triangle.2.circlepath")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.blue)
+                        Text("匹配: \(existing.name)")
+                            .font(.caption2)
+                            .foregroundStyle(.blue)
+                        Spacer()
+                        if abs(existing.value - asset.value) > 0.01 {
+                            Text("市值 \(existing.value, format: .currency(code: "CNY")) → \(asset.value, format: .currency(code: "CNY"))")
+                                .font(.caption2)
+                                .foregroundStyle(.secondary)
+                        }
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.blue.opacity(0.05)).cornerRadius(4)
+                } else {
+                    HStack(spacing: 4) {
+                        Image(systemName: "plus.circle")
+                            .font(.system(size: 10))
+                            .foregroundStyle(.green)
+                        Text("新资产，将自动添加到持仓")
+                            .font(.caption2)
+                            .foregroundStyle(.green)
+                    }
+                    .padding(.horizontal, 8).padding(.vertical, 4)
+                    .background(Color.green.opacity(0.05)).cornerRadius(4)
+                }
+            }
+            .padding(10)
+            .background(Color(nsColor: .controlBackgroundColor))
+            .cornerRadius(8)
+        }
     }
 
     // MARK: - 逻辑
