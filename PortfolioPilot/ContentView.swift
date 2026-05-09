@@ -28,6 +28,7 @@ struct ContentView: View {
     @State private var operationMode: OperationMode = .invest
     @State private var calculationResult: SmartCalculationResult?
     @State private var showSettings = false
+    @State private var showScreenshotImport = false
     @State private var showRebalanceConfirm = false
     @State private var rebalancePlan: SmartCalculationResult?
 
@@ -172,6 +173,12 @@ struct ContentView: View {
 
     private var sidebarContent: some View {
         Form {
+            Section {
+                Button(action: { showScreenshotImport = true }) {
+                    Label("截图导入", systemImage: "camera.viewfinder")
+                }
+                .buttonStyle(.borderless)
+            }
             fundingSection
             positionSection
         }
@@ -179,6 +186,7 @@ struct ContentView: View {
         .navigationSplitViewColumnWidth(min: 320, ideal: 380)
         .toolbar { ToolbarItem(placement: .primaryAction) { Button(action: { showSettings = true }) { Label("设置", systemImage: "gearshape") } } }
         .sheet(isPresented: $showSettings) { SettingsView(resetAction: resetAllData, autoSaveManager: autoSaveManager) }
+        .sheet(isPresented: $showScreenshotImport) { ScreenshotImportView() }
     }
 
     private var fundingSection: some View {

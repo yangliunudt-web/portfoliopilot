@@ -21,6 +21,11 @@ struct SettingsView: View {
     @State private var newAssetValue: Double? = nil; @State private var newAssetPrincipal: Double? = nil
     @State private var assetToDelete: AssetItem? = nil
 
+    @AppStorage("aiBaseURL") private var aiBaseURL = "https://dashscope.aliyuncs.com/compatible-mode/v1"
+    @AppStorage("aiModel") private var aiModel = "qwen-vl-max"
+    @State private var apiKeyInput = ""
+    @State private var testResult: String?
+
     var totalTarget: Double { bondTarget + nasdaqTarget + goldTarget + csiTarget + cashTarget }
 
     var body: some View {
@@ -31,6 +36,7 @@ struct SettingsView: View {
                 manageAssetsSection
                 thresholdSection
                 autoBackupSection
+                aiSection
                 dataManagementSection
             }
             .formStyle(.grouped).navigationTitle("设置").toolbar { ToolbarItem { Button("完成") { dismiss() } } }
@@ -77,6 +83,7 @@ struct SettingsView: View {
             }
             .alert("导入成功", isPresented: $showImportSuccess) { Button("OK") { dismiss() } }
         }.frame(minWidth: 450, minHeight: 650)
+        .onAppear { apiKeyInput = KeychainManager.load(key: "ai_api_key") ?? "" }
     }
 
     @ViewBuilder
@@ -205,6 +212,96 @@ struct SettingsView: View {
         panel.message = "自动备份文件将保存到此目录"
         if panel.runModal() == .OK, let url = panel.url {
             autoSaveManager.autoBackupDirectory = url.path
+        }
+    }
+
+    // MARK: - AI 截图识别
+
+    @ViewBuilder
+    private var aiSection: some View {
+        Section {
+            HStack {
+                Text("API 地址")
+                Spacer()
+                TextField("https://...", text: $aiBaseURL)
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 280)
+                    .font(.caption)
+            }
+            HStack {
+                Text("模型名称")
+                Spacer()
+                TextField("qwen-vl-max", text: $aiModel)
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .font(.caption)
+            }
+            HStack {
+                Text("API Key")
+                Spacer()
+                SecureField("sk-...", text: $apiKeyInput)
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 260)
+                    .font(.caption)
+                    .onChange(of: apiKeyInput) { _, newValue in
+                        if newValue.isEmpty {
+                            KeychainManager.delete(key: "ai_api_key")
+                        } else {
+                            KeychainManager.save(key: "ai_api_key", value: newValue)
+                        }
+                    }
+            }
+            HStack {
+                Spacer()
+                Button("测试连接") { testAIConnection() }
+                    .font(.caption)
+                if let result = testResult {
+                    Text(result)
+                        .font(.caption)
+                        .foregroundStyle(result.contains("成功") ? .green : .red)
+                }
+            }
+        } header: {
+            Text("AI 截图识别")
+        } footer: {
+            Text("支持 OpenAI 兼容的视觉模型 API，如阿里通义千问 (qwen-vl-max)、智谱 GLM-4V 等。API Key 安全存储在系统钥匙串中。")
+        }
+    }
+
+    private func testAIConnection() {
+        let key = KeychainManager.load(key: "ai_api_key") ?? ""
+        guard !key.isEmpty, !aiBaseURL.isEmpty else {
+            testResult = "请填写 API 地址和 Key"
+            return
+        }
+        testResult = nil
+        Task {
+            do {
+                let url = URL(string: "\(aiBaseURL.hasSuffix("/") ? String(aiBaseURL.dropLast()) : aiBaseURL)/chat/completions")!
+                var request = URLRequest(url: url)
+                request.httpMethod = "POST"
+                request.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+                request.timeoutInterval = 15
+                let body: [String: Any] = [
+                    "model": aiModel,
+                    "messages": [["role": "user", "content": "回复 OK"]],
+                    "max_tokens": 10
+                ]
+                request.httpBody = try JSONSerialization.data(withJSONObject: body)
+                let (_, response) = try await URLSession.shared.data(for: request)
+                let code = (response as? HTTPURLResponse)?.statusCode ?? 0
+                await MainActor.run {
+                    testResult = code == 200 ? "连接成功" : "HTTP \(code)"
+                }
+            } catch {
+                await MainActor.run {
+                    testResult = "连接失败: \(error.localizedDescription)"
+                }
+            }
         }
     }
 
