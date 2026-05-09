@@ -18,6 +18,7 @@ struct ScreenshotImportView: View {
     @State private var isLoading = false
     @State private var errorMessage: String?
     @State private var stage: Stage = .input
+    @State private var isAuthenticating = false
 
     enum Stage { case input, preview }
 
@@ -295,20 +296,27 @@ struct ScreenshotImportView: View {
         return jaccard >= 0.55
     }
 
-    // MARK: - Apple Watch 认证
+    // MARK: - Touch ID 认证（macOS 上不使用 Apple Watch，用 Touch ID）
 
-    private func authenticateWithWatch() async -> Bool {
+    private func authenticateWithBiometrics() async -> Bool {
+        guard !isAuthenticating else { return false }
+        isAuthenticating = true
+        defer { isAuthenticating = false }
+
         let context = LAContext()
-        context.localizedReason = "使用 Apple Watch 或 Touch ID 验证身份以识别持仓截图"
+        context.localizedReason = "使用 Touch ID 验证身份以识别持仓截图"
+
+        // 检查是否支持生物认证
         var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
-            await MainActor.run { errorMessage = "设备不支持生物认证: \(error?.localizedDescription ?? "")" }
-            return false
+        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
+            // 无 Touch ID 的 Mac（如 Mac mini），直接放行
+            return true
         }
+
         do {
-            return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "验证身份以使用 AI 截图识别")
+            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "验证身份以使用 AI 截图识别")
         } catch {
-            await MainActor.run { errorMessage = "验证取消或失败" }
+            await MainActor.run { errorMessage = "Touch ID 验证取消" }
             return false
         }
     }
@@ -316,13 +324,13 @@ struct ScreenshotImportView: View {
     // MARK: - 逻辑
 
     private func analyzeImage() {
-        guard let image else { return }
+        guard let image, !isLoading else { return }
         isLoading = true; errorMessage = nil
 
         Task {
-            // 1. Apple Watch 认证
-            guard await authenticateWithWatch() else {
-                isLoading = false
+            // 1. Touch ID 验证（仅支持 Touch ID 的 Mac 需要，无传感器的直接通过）
+            guard await authenticateWithBiometrics() else {
+                await MainActor.run { isLoading = false }
                 return
             }
             // 2. 读取 KeyChain 中的 API Key
@@ -355,15 +363,13 @@ struct ScreenshotImportView: View {
 
     private func applyChanges() {
         for detected in detectedAssets {
-            // 名称模糊匹配现有资产
             if let idx = assetList.items.firstIndex(where: {
                 isAssetNameMatch($0.name, detected.name)
             }) {
-                let oldPrin = assetList.items[idx].principal
+                // 匹配到的资产：只更新市值，保留用户原有的本金
                 assetList.items[idx].value = detected.value
-                assetList.items[idx].principal = detected.principal
-                totalUserPrincipal = ((totalUserPrincipal - oldPrin + detected.principal) * 100).rounded() / 100
             } else {
+                // 新资产：全量添加
                 assetList.items.append(AssetItem(name: detected.name, category: detected.category, value: detected.value, principal: detected.principal))
                 totalUserPrincipal = ((totalUserPrincipal + detected.principal) * 100).rounded() / 100
             }
