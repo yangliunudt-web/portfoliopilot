@@ -49,6 +49,7 @@ struct ContentView: View {
     @State private var isLoadingAdvice = false
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
+    @AppStorage("ai_api_key") private var apiKey = ""
     @AppStorage("aiTextModel") private var aiTextModel = "glm-4-flash"
 
     enum OperationMode: String, CaseIterable {
@@ -136,26 +137,32 @@ struct ContentView: View {
     }
 
     var rangeStats: (start: ChartDataPoint, end: ChartDataPoint, valueChange: Double, principalChange: Double, yield: Double, annualizedYield: Double)? {
-        guard let range = rangeSelection,
-              let startPoint = chartDataPoints.first(where: { $0.date >= range.lowerBound }),
-              let endPoint = chartDataPoints.last(where: { $0.date <= range.upperBound }),
-              startPoint.date < endPoint.date else { return nil }
+        guard let range = rangeSelection else { return nil }
+        let points = chartDataPoints
+
+        // 找到区间内的第一个和最后一个点（允许相同点）
+        guard let startIdx = points.firstIndex(where: { $0.date >= range.lowerBound }),
+              let endIdx = points.lastIndex(where: { $0.date <= range.upperBound }) else { return nil }
+
+        let startPoint = points[max(0, startIdx - 1)]  // 取前一个点做基线
+        let endPoint = points[endIdx]
 
         let valueChange = endPoint.value - startPoint.value
         let principalChange = endPoint.principal - startPoint.principal
-        let yield = endPoint.principal > 0 ? ((endPoint.value - endPoint.principal) - (startPoint.value - startPoint.principal)) / endPoint.principal : 0
 
-        let days = endPoint.date.timeIntervalSince(startPoint.date) / (24 * 60 * 60)
+        let yield: Double
+        if endPoint.principal > 0 {
+            yield = (endPoint.value - endPoint.principal) / endPoint.principal
+        } else if startPoint.value > 0 {
+            yield = (endPoint.value - startPoint.value) / startPoint.value
+        } else {
+            yield = 0
+        }
+
+        let days = max(1, endPoint.date.timeIntervalSince(startPoint.date) / (24 * 60 * 60))
         let annualizedYield: Double
-        if days > 0 {
-            let totalReturn: Double
-            if startPoint.principal > 0 && endPoint.principal > 0 && startPoint.value > 0 {
-                totalReturn = (endPoint.value / endPoint.principal) / (startPoint.value / startPoint.principal) - 1
-            } else if startPoint.principal == 0 && endPoint.principal > 0 {
-                totalReturn = (endPoint.value - endPoint.principal) / endPoint.principal
-            } else {
-                totalReturn = 0
-            }
+        if startPoint.value > 0 && endPoint.value > 0 {
+            let totalReturn = endPoint.value / startPoint.value - 1
             annualizedYield = pow(1 + totalReturn, 365 / days) - 1
         } else {
             annualizedYield = 0
@@ -421,8 +428,14 @@ struct ContentView: View {
             let lastPoint = points.last
             let firstPoint = points.first
             let totalChange: Double = {
-                guard let f = firstPoint, let l = lastPoint, f.principal > 0 else { return 0 }
-                return (l.value / l.principal) - (f.value / f.principal)
+                guard let f = firstPoint, let l = lastPoint else { return 0 }
+                if f.principal > 0 {
+                    return (l.value / l.principal) - (f.value / f.principal)
+                } else if f.value > 0 {
+                    // 单类资产可能无本金数据，用市值变化率
+                    return (l.value / f.value) - 1
+                }
+                return 0
             }()
 
             VStack(spacing: 0) {
@@ -730,8 +743,7 @@ struct ContentView: View {
     }
 
     private func fetchAdviceFromAI() async {
-        let key = KeychainManager.load(key: "ai_api_key") ?? ""
-        guard !key.isEmpty else {
+        guard !apiKey.isEmpty else {
             aiAdvice = "请先在设置中配置 AI API Key"
             isLoadingAdvice = false
             return
@@ -753,7 +765,7 @@ struct ContentView: View {
                     absThreshold: absThreshold,
                     relThreshold: relThreshold,
                     apiBaseURL: aiBaseURL,
-                    apiKey: key,
+                    apiKey: apiKey,
                     model: aiTextModel
                 )
                 await MainActor.run {

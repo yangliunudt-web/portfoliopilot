@@ -11,6 +11,7 @@ struct ScreenshotImportView: View {
     @AppStorage("totalUserPrincipal") private var totalUserPrincipal: Double = 0
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
+    @AppStorage("ai_api_key") private var apiKey = ""
 
     @State private var image: NSImage?
     @State private var detectedAssets: [DetectedAsset] = []
@@ -310,8 +311,7 @@ struct ScreenshotImportView: View {
                 return
             }
 
-            let key = KeychainManager.load(key: "ai_api_key") ?? ""
-            guard !key.isEmpty else {
+            guard !apiKey.isEmpty else {
                 await MainActor.run {
                     isLoading = false
                     errorMessage = "未配置 API Key，请先在设置中填写"
@@ -320,7 +320,7 @@ struct ScreenshotImportView: View {
             }
 
             do {
-                let analyzer = ScreenshotAnalyzer(baseURL: aiBaseURL, apiKey: key, model: aiModel)
+                let analyzer = ScreenshotAnalyzer(baseURL: aiBaseURL, apiKey: apiKey, model: aiModel)
                 let result = try await analyzer.analyze(image: image)
                 await MainActor.run {
                     isLoading = false

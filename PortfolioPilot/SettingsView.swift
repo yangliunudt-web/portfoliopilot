@@ -24,9 +24,9 @@ struct SettingsView: View {
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
     @AppStorage("aiTextModel") private var aiTextModel = "glm-4-flash"
+    @AppStorage("ai_api_key") private var apiKey = ""
     @State private var apiKeyInput = ""
     @State private var keyRevealed = false
-    @State private var originalKey = ""  // 追踪原始值，只在改变时保存
     @State private var testResult: String?
 
     var totalTarget: Double { bondTarget + nasdaqTarget + goldTarget + csiTarget + cashTarget }
@@ -263,17 +263,10 @@ struct SettingsView: View {
                     .disabled(!keyRevealed)
                 Button(keyRevealed ? "保存" : "查看") {
                     if keyRevealed {
-                        if apiKeyInput != originalKey {
-                            if apiKeyInput.isEmpty {
-                                KeychainManager.delete(key: "ai_api_key")
-                            } else {
-                                KeychainManager.save(key: "ai_api_key", value: apiKeyInput)
-                            }
-                        }
+                        apiKey = apiKeyInput
                         keyRevealed = false
                     } else {
-                        originalKey = KeychainManager.load(key: "ai_api_key") ?? ""
-                        apiKeyInput = originalKey
+                        apiKeyInput = apiKey
                         keyRevealed = true
                     }
                 }.font(.caption2)
@@ -296,8 +289,7 @@ struct SettingsView: View {
     }
 
     private func testAIConnection() {
-        let key = KeychainManager.load(key: "ai_api_key") ?? ""
-        guard !key.isEmpty, !aiBaseURL.isEmpty else {
+        guard !apiKey.isEmpty, !aiBaseURL.isEmpty else {
             testResult = "请填写 API 地址和 Key"
             return
         }
@@ -315,7 +307,7 @@ struct SettingsView: View {
                 var request = URLRequest(url: url)
                 request.httpMethod = "POST"
                 request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-                request.setValue("Bearer \(key)", forHTTPHeaderField: "Authorization")
+                request.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
                 request.timeoutInterval = 15
 
                 // GLM-5V-Turbo 是视觉模型，需要携带图片才能正常响应
