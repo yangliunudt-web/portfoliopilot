@@ -143,17 +143,19 @@ struct ContentView: View {
         let points = chartDataPoints
         guard points.count >= 2 else { return nil }
 
-        // 用日期找到精确索引
         guard let startIdx = points.firstIndex(where: { $0.date >= range.lowerBound }),
               let endIdx = points.lastIndex(where: { $0.date <= range.upperBound }),
-              startIdx <= endIdx else { return nil }
+              startIdx <= endIdx else {
+            let _ = print("[StatsDebug] No match: range=\(range.lowerBound.formatted(.iso8601))~\(range.upperBound.formatted(.iso8601))")
+            return nil
+        }
 
-        // 基线取起点前一个数据点（测量区间内的变化量）
         let baselineIdx = max(0, startIdx - 1)
         let startPoint = points[baselineIdx]
         let endPoint = points[endIdx]
 
-        // 如果基线和终点是同一个点 → 无变化
+        let _ = print("[StatsDebug] baseline[\(baselineIdx)]=\(startPoint.date.formatted(.iso8601)) v=\(Int(startPoint.value)), end[\(endIdx)]=\(endPoint.date.formatted(.iso8601)) v=\(Int(endPoint.value)), change=\(Int(endPoint.value - startPoint.value))")
+
         guard baselineIdx != endIdx else { return nil }
 
         let valueChange = endPoint.value - startPoint.value
@@ -560,15 +562,20 @@ struct ContentView: View {
                         }
                         .chartOverlay { chartProxy in
                             GeometryReader { overlayGeo in
-                                // 解析绘图区 frame
+                                let hasPlotAnchor = chartProxy.plotFrame != nil
+                                // 一次性打印图表元信息
+                                let _ = print("[DragDebug] plotFrame: \(hasPlotAnchor ? "OK" : "NIL"), overlay: \(overlayGeo.size.width)x\(overlayGeo.size.height), domain: \(currentChartDomain.lowerBound.formatted(.iso8601)) ~ \(currentChartDomain.upperBound.formatted(.iso8601)), dataPoints: \(chartDataPoints.count)")
+
+                                // 解析绘图区
                                 let plotFrame: CGRect = {
                                     if let anchor = chartProxy.plotFrame {
-                                        return overlayGeo[anchor]
+                                        let f = overlayGeo[anchor]
+                                        let _ = print("[DragDebug] plotFrame resolved: origin=\(f.origin), size=\(f.size)")
+                                        return f
                                     }
-                                    // fallback: 估算 Y 轴宽 ~70px
                                     var f = overlayGeo.frame(in: .local)
-                                    f.origin.x += 70
-                                    f.size.width -= 70
+                                    f.origin.x += 70; f.size.width -= 70
+                                    let _ = print("[DragDebug] plotFrame FALLBACK: origin=\(f.origin), size=\(f.size)")
                                     return f
                                 }()
 
@@ -581,17 +588,34 @@ struct ContentView: View {
                                                 guard plotFrame.width > 0 else { return }
                                                 let x1 = min(plotFrame.maxX, max(plotFrame.minX, value.startLocation.x))
                                                 let x2 = min(plotFrame.maxX, max(plotFrame.minX, value.location.x))
-                                                // 用 chartProxy 把屏幕坐标直接转为日期
-                                                let s: Date? = chartProxy.value(atX: x1)
-                                                let e: Date? = chartProxy.value(atX: x2)
-                                                if let s, let e {
-                                                    rangeSelection = min(s, e)...max(s, e)
-                                                }
+                                                let r1 = (x1 - plotFrame.minX) / plotFrame.width
+                                                let r2 = (x2 - plotFrame.minX) / plotFrame.width
+
+                                                // 同时试两种方法，对比结果
+                                                let domain = currentChartDomain
+                                                let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
+                                                let sManual = domain.lowerBound.addingTimeInterval(r1 * dur)
+                                                let eManual = domain.lowerBound.addingTimeInterval(r2 * dur)
+                                                let sProxy: Date? = chartProxy.value(atX: x1)
+                                                let eProxy: Date? = chartProxy.value(atX: x2)
+
+                                                let _ = print("[DragDebug] x1=\(Int(x1))→r1=\(String(format:"%.3f",r1)) manual=\(sManual.formatted(.iso8601)) proxy=\(sProxy?.formatted(.iso8601) ?? "nil") | x2=\(Int(x2))→r2=\(String(format:"%.3f",r2)) manual=\(eManual.formatted(.iso8601)) proxy=\(eProxy?.formatted(.iso8601) ?? "nil")")
+
+                                                // 优先用 proxy，失败则用 manual
+                                                let s = sProxy ?? sManual
+                                                let e = eProxy ?? eManual
+                                                rangeSelection = min(s, e)...max(s, e)
                                             }
-                                        .onEnded { _ in isDraggingRange = false }
+                                        .onEnded { _ in
+                                            isDraggingRange = false
+                                            let _ = print("[DragDebug] --- drag ended ---")
+                                        }
                                 )
                                 .simultaneousGesture(
-                                    TapGesture().onEnded { rangeSelection = nil }
+                                    TapGesture().onEnded {
+                                        rangeSelection = nil
+                                        let _ = print("[DragDebug] --- tap cleared ---")
+                                    }
                                 )
                             }
                         }
