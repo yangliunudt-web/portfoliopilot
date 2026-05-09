@@ -72,7 +72,12 @@ struct StrategyPreviewCard: View {
                 if aiLoading {
                     HStack(spacing: 6) { ProgressView().scaleEffect(0.7); Text("AI 分析中...").font(.caption2).foregroundStyle(.secondary) }
                 } else if let suggestion = aiSuggestion {
-                    Text(suggestion).font(.caption).foregroundStyle(.blue).padding(6).background(Color.blue.opacity(0.05)).cornerRadius(4)
+                    VStack(alignment: .leading, spacing: 4) {
+                        Text(suggestion).font(.caption).foregroundStyle(.blue).padding(6).background(Color.blue.opacity(0.05)).cornerRadius(4)
+                        Button(action: { onAIOptimize?() }) {
+                            HStack(spacing: 3) { Image(systemName: "arrow.clockwise"); Text("刷新建议").font(.caption2) }
+                        }.buttonStyle(.borderless).foregroundStyle(.blue)
+                    }
                 } else {
                     Button(action: { onAIOptimize?() }) {
                         HStack(spacing: 3) { Image(systemName: "brain"); Text("AI 简化建议").font(.caption2) }
