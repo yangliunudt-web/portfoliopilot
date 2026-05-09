@@ -5,6 +5,8 @@ import UniformTypeIdentifiers
 struct ScreenshotImportView: View {
     @Environment(\.dismiss) private var dismiss
 
+    var onDataChanged: (() -> Void)? = nil
+
     @AppStorage("portfolioAssetsV3") private var assetList = AssetList(items: [])
     @AppStorage("totalUserPrincipal") private var totalUserPrincipal: Double = 0
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
@@ -335,6 +337,7 @@ struct ScreenshotImportView: View {
                 totalUserPrincipal = ((totalUserPrincipal + detected.principal) * 100).rounded() / 100
             }
         }
+        onDataChanged?()
     }
 
     private func selectImageFile() {

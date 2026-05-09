@@ -186,7 +186,9 @@ struct ContentView: View {
         .navigationSplitViewColumnWidth(min: 320, ideal: 380)
         .toolbar { ToolbarItem(placement: .primaryAction) { Button(action: { showSettings = true }) { Label("设置", systemImage: "gearshape") } } }
         .sheet(isPresented: $showSettings) { SettingsView(resetAction: resetAllData, autoSaveManager: autoSaveManager) }
-        .sheet(isPresented: $showScreenshotImport) { ScreenshotImportView() }
+        .sheet(isPresented: $showScreenshotImport) {
+            ScreenshotImportView(onDataChanged: { saveRecord(); autoSaveManager.saveImmediately() })
+        }
     }
 
     private var fundingSection: some View {
@@ -403,133 +405,217 @@ struct ContentView: View {
             let catColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
 
             let allValues = points.flatMap { [$0.value, $0.principal] }
-            let minY = allValues.min() ?? 0
-            let maxY = allValues.max() ?? 100
-            let diff = maxY - minY
-            let pad = diff == 0 ? (minY * 0.05) : (diff * 0.15)
-            let domainMin = max(0, minY - pad)
-            let domainMax = maxY + pad
+            let minY = max(0, (allValues.min() ?? 0) * 0.85)
+            let maxY = (allValues.max() ?? 100) * 1.05
+            let domainMin = minY
+            let domainMax = maxY
 
-            GeometryReader { geometry in
-                Chart {
-                    ForEach(points) { point in
-                        LineMark(x: .value("Date", point.date), y: .value("Principal", point.principal), series: .value("Type", "Principal"))
-                            .interpolationMethod(.stepCenter)
-                            .lineStyle(StrokeStyle(lineWidth: 1.5))
-                            .foregroundStyle(.gray.opacity(0.8))
+            let lastPoint = points.last
+            let firstPoint = points.first
+            let totalChange: Double = {
+                guard let f = firstPoint, let l = lastPoint, f.principal > 0 else { return 0 }
+                return (l.value / l.principal) - (f.value / f.principal)
+            }()
 
-                        AreaMark(
-                            x: .value("Date", point.date),
-                            yStart: .value("Min", domainMin),
-                            yEnd: .value("Value", point.value)
-                        )
-                        .interpolationMethod(.stepCenter)
-                        .foregroundStyle(LinearGradient(colors: [catColor.opacity(0.6), catColor.opacity(0.1), .clear], startPoint: .top, endPoint: .bottom))
+            VStack(spacing: 0) {
+                GeometryReader { geometry in
+                    ZStack(alignment: .topLeading) {
+                        Chart {
+                            // 本金虚线
+                            ForEach(points) { point in
+                                LineMark(x: .value("Date", point.date), y: .value("Principal", point.principal), series: .value("Type", "本金"))
+                                    .interpolationMethod(.catmullRom)
+                                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                                    .foregroundStyle(.gray.opacity(0.6))
+                            }
 
-                        LineMark(x: .value("Date", point.date), y: .value("Value", point.value), series: .value("Type", "Value"))
-                            .interpolationMethod(.stepCenter).foregroundStyle(catColor).lineStyle(StrokeStyle(lineWidth: 2))
+                            // 市值面积渐变
+                            ForEach(points) { point in
+                                AreaMark(
+                                    x: .value("Date", point.date),
+                                    yStart: .value("Min", domainMin),
+                                    yEnd: .value("Value", point.value)
+                                )
+                                .interpolationMethod(.catmullRom)
+                                .foregroundStyle(LinearGradient(
+                                    colors: [catColor.opacity(0.5), catColor.opacity(0.1), .clear],
+                                    startPoint: .top, endPoint: .bottom
+                                ))
+                            }
 
-                        if let rawSelectedDate { RuleMark(x: .value("Selected", rawSelectedDate)).foregroundStyle(Color.gray.opacity(0.5)) }
-                        if let range = rangeSelection {
-                            RectangleMark(
-                                xStart: .value("RangeStart", range.lowerBound),
-                                xEnd: .value("RangeEnd", range.upperBound),
-                                yStart: .value("YMin", domainMin),
-                                yEnd: .value("YMax", domainMax)
-                            )
-                            .foregroundStyle(Color.blue.opacity(0.1))
-                        }
-                    }
-                }
-                .chartPlotStyle { plotArea in
-                    plotArea.clipped()
-                }
-                .chartLegend(.hidden)
-                .chartXSelection(value: $rawSelectedDate)
-                .chartXScale(domain: currentChartDomain)
-                .chartYScale(domain: domainMin...domainMax)
-                .chartYAxis {
-                    AxisMarks(position: .leading) { value in
-                        AxisGridLine(stroke: StrokeStyle(lineWidth: 0.5, dash: [4, 4]))
-                            .foregroundStyle(Color.gray.opacity(0.3))
-                        AxisValueLabel()
-                    }
-                }
-                .chartXAxis {
-                    AxisMarks(values: .automatic) { value in
-                        if let date = value.as(Date.self) {
-                            AxisValueLabel {
-                                if selectedTimeRange == .oneMinute { Text(date, format: .dateTime.hour().minute().second()) }
-                                else if selectedTimeRange == .oneDay { Text(date, format: .dateTime.hour().minute()) }
-                                else { Text(date, format: .dateTime.month().day()) }
+                            // 市值主线
+                            ForEach(points) { point in
+                                LineMark(x: .value("Date", point.date), y: .value("Value", point.value), series: .value("Type", "市值"))
+                                    .interpolationMethod(.catmullRom)
+                                    .foregroundStyle(catColor)
+                                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                            }
+
+                            // 鼠标竖线
+                            if let sel = rawSelectedDate {
+                                RuleMark(x: .value("Selected", sel))
+                                    .foregroundStyle(Color.secondary.opacity(0.4))
+                                    .lineStyle(StrokeStyle(lineWidth: 1))
+                            }
+
+                            // 框选高亮
+                            if let range = rangeSelection {
+                                RectangleMark(
+                                    xStart: .value("RangeStart", range.lowerBound),
+                                    xEnd: .value("RangeEnd", range.upperBound),
+                                    yStart: .value("YMin", domainMin),
+                                    yEnd: .value("YMax", domainMax)
+                                )
+                                .foregroundStyle(isDraggingRange ? Color.blue.opacity(0.15) : Color.blue.opacity(0.08))
                             }
                         }
-                    }
-                }
-                .chartOverlay { _ in
-                    Color.clear
-                        .gesture(
-                            DragGesture(minimumDistance: 10)
-                                .onChanged { value in
-                                    isDraggingRange = true
-                                    let xPosition = value.startLocation.x
-                                    let xDelta = value.location.x - value.startLocation.x
-                                    let chartWidth = geometry.size.width
-                                    let normalizedStart = max(0, min(1, xPosition / chartWidth))
-                                    let normalizedEnd = max(0, min(1, (xPosition + xDelta) / chartWidth))
-
-                                    let domain = currentChartDomain
-                                    let startDate = domain.lowerBound.addingTimeInterval(normalizedStart * (domain.upperBound.timeIntervalSince(domain.lowerBound)))
-                                    let endDate = domain.lowerBound.addingTimeInterval(normalizedEnd * (domain.upperBound.timeIntervalSince(domain.lowerBound)))
-
-                                    rangeSelection = min(startDate, endDate)...max(startDate, endDate)
-                                }
-                                .onEnded { _ in
-                                    isDraggingRange = false
-                                    if let range = rangeSelection, range.upperBound.timeIntervalSince(range.lowerBound) < 60 {
-                                        rangeSelection = nil
+                        .chartPlotStyle { plotArea in
+                            plotArea.clipped()
+                        }
+                        .chartLegend(.hidden)
+                        .chartXSelection(value: $rawSelectedDate)
+                        .chartXScale(domain: currentChartDomain)
+                        .chartYScale(domain: domainMin...domainMax)
+                        .chartYAxis {
+                            AxisMarks(position: .leading, values: .automatic(desiredCount: 5)) { value in
+                                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.4, dash: [4, 4]))
+                                    .foregroundStyle(Color.gray.opacity(0.25))
+                                AxisValueLabel()
+                                    .font(.system(size: 10))
+                            }
+                        }
+                        .chartXAxis {
+                            AxisMarks(values: .automatic(desiredCount: max(4, min(8, points.count / 2)))) { value in
+                                AxisGridLine(stroke: StrokeStyle(lineWidth: 0.4))
+                                    .foregroundStyle(Color.gray.opacity(0.2))
+                                AxisValueLabel {
+                                    if let date = value.as(Date.self) {
+                                        switch selectedTimeRange {
+                                        case .oneMinute:
+                                            Text(date, format: .dateTime.hour().minute().second())
+                                        case .oneDay:
+                                            Text(date, format: .dateTime.hour().minute())
+                                        case .oneWeek, .twoWeeks:
+                                            Text(date, format: .dateTime.month().day().hour())
+                                        case .oneMonth, .oneQuarter:
+                                            Text(date, format: .dateTime.month().day())
+                                        case .oneYear, .all:
+                                            Text(date, format: .dateTime.month())
+                                        case .custom:
+                                            Text(date, format: .dateTime.month().day())
+                                        }
                                     }
                                 }
-                        )
+                                .font(.system(size: 9))
+                            }
+                        }
+                        .chartOverlay { chartProxy in
+                            Color.clear
+                                .contentShape(Rectangle())
+                                .gesture(
+                                    DragGesture(minimumDistance: 5)
+                                        .onChanged { value in
+                                            isDraggingRange = true
+                                            let xPos = value.startLocation.x
+                                            let delta = value.location.x - value.startLocation.x
+                                            let w = geometry.size.width
+                                            let nStart = max(0, min(1, xPos / w))
+                                            let nEnd = max(0, min(1, (xPos + delta) / w))
+
+                                            let domain = currentChartDomain
+                                            let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
+                                            let s = domain.lowerBound.addingTimeInterval(nStart * dur)
+                                            let e = domain.lowerBound.addingTimeInterval(nEnd * dur)
+
+                                            rangeSelection = min(s, e)...max(s, e)
+                                        }
+                                        .onEnded { _ in
+                                            isDraggingRange = false
+                                            if let r = rangeSelection, r.upperBound.timeIntervalSince(r.lowerBound) < 60 {
+                                                rangeSelection = nil
+                                            }
+                                        }
+                                )
+                        }
+
+                        // 拖动实时标签
+                        if isDraggingRange, let r = rangeSelection {
+                            Text("\(r.lowerBound, format: .dateTime.month().day()) — \(r.upperBound, format: .dateTime.month().day())")
+                                .font(.system(size: 10).monospacedDigit())
+                                .padding(.horizontal, 6).padding(.vertical, 2)
+                                .background(Color.blue.opacity(0.2))
+                                .cornerRadius(3)
+                                .offset(x: 8, y: 8)
+                        }
+                    }
                 }
+                .frame(height: 350)
+
+                // 图例
+                HStack(spacing: 20) {
+                    HStack(spacing: 4) {
+                        Capsule().fill(catColor).frame(width: 16, height: 3)
+                        Text("市值").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    HStack(spacing: 4) {
+                        Capsule().fill(.gray.opacity(0.6)).frame(width: 16, height: 2)
+                        Text("本金").font(.caption2).foregroundStyle(.secondary)
+                    }
+                    if let f = firstPoint, f.principal > 0 {
+                        Text("区间收益率: \(totalChange >= 0 ? "+" : "")\(totalChange * 100, specifier: "%.2f")%")
+                            .font(.caption2).bold()
+                            .foregroundStyle(totalChange >= 0 ? .red : .green)
+                    }
+                    Spacer()
+                    Text("拖拽时间轴框选区间")
+                        .font(.system(size: 9))
+                        .foregroundStyle(.gray.opacity(0.5))
+                }
+                .padding(.top, 6)
             }
-            .frame(height: 350)
             .overlay(alignment: .topTrailing) {
                 if let stats = rangeStats {
-                    VStack(alignment: .trailing, spacing: 4) {
+                    VStack(alignment: .trailing, spacing: 6) {
                         HStack {
-                            Button("清除") { rangeSelection = nil }.font(.caption2).foregroundStyle(.blue)
+                            Image(systemName: "hand.draw").font(.caption2).foregroundStyle(.blue)
+                            Text("区间统计").font(.caption).bold()
                             Spacer()
-                            Text("区间统计").font(.caption).foregroundStyle(.secondary).bold()
+                            Button("×") { rangeSelection = nil }
+                                .font(.caption).foregroundStyle(.secondary)
+                                .buttonStyle(.plain)
                         }
-                        HStack(spacing: 12) {
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("市值变化").font(.caption2).foregroundStyle(.secondary)
-                                Text(stats.valueChange, format: .currency(code: "CNY"))
-                                    .font(.caption).bold().foregroundStyle(stats.valueChange >= 0 ? .red : .green)
-                            }
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("本金变化").font(.caption2).foregroundStyle(.secondary)
-                                Text(stats.principalChange, format: .currency(code: "CNY"))
-                                    .font(.caption).bold().foregroundStyle(stats.principalChange >= 0 ? .red : .green)
-                            }
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("收益率").font(.caption2).foregroundStyle(.secondary)
-                                Text(stats.yield, format: .percent.precision(.fractionLength(2)))
-                                    .font(.caption).bold().foregroundStyle(stats.yield >= 0 ? .red : .green)
-                            }
-                            VStack(alignment: .trailing, spacing: 2) {
-                                Text("年化率").font(.caption2).foregroundStyle(.secondary)
-                                Text(stats.annualizedYield, format: .percent.precision(.fractionLength(2)))
-                                    .font(.caption).bold().foregroundStyle(stats.annualizedYield >= 0 ? .red : .green)
-                            }
+                        Divider()
+                        Group {
+                            statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
+                            statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
+                            statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
+                            statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
                         }
-                        Text("\(stats.start.date, format: .dateTime.month().day()) -> \(stats.end.date, format: .dateTime.month().day())")
-                            .font(.caption2).foregroundStyle(.secondary)
+                        Text("\(stats.start.date, format: .dateTime.month().day().hour().minute()) → \(stats.end.date, format: .dateTime.month().day().hour().minute())")
+                            .font(.system(size: 10)).foregroundStyle(.secondary)
                     }
-                    .padding(8).background(Color(nsColor: .windowBackgroundColor)).cornerRadius(8).shadow(radius: 2)
+                    .padding(10)
+                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                    .cornerRadius(8)
+                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                    .frame(width: 220)
                     .padding(8)
                 }
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func statRow(_ label: String, _ value: Double, _ color: Color, isPercent: Bool = false) -> some View {
+        HStack {
+            Text(label).font(.caption2).foregroundStyle(.secondary)
+            Spacer()
+            if isPercent {
+                Text("\(value >= 0 ? "+" : "")\(value * 100, specifier: "%.2f")%")
+                    .font(.caption).bold().foregroundStyle(color).monospacedDigit()
+            } else {
+                Text("\(value >= 0 ? "+" : "")\(value.formatted(.currency(code: "CNY")))")
+                    .font(.caption).bold().foregroundStyle(color).monospacedDigit()
             }
         }
     }
