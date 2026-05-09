@@ -561,51 +561,70 @@ struct ContentView: View {
                 }
                 .frame(height: 350)
 
-                // 底部：图例 + 区间收益率
+                // 底部：当前时间范围收益率
                 HStack {
-                    HStack(spacing: 4) {
-                        Capsule().fill(catColor).frame(width: 14, height: 3)
-                        Text("市值").font(.caption2).foregroundStyle(.secondary)
-                    }
-                    HStack(spacing: 4) {
-                        Capsule().fill(.gray.opacity(0.6)).frame(width: 14, height: 2)
-                        Text("本金").font(.caption2).foregroundStyle(.secondary)
+                    if let f = firstPoint, let l = lastPoint, f.principal > 0 {
+                        Text("当前范围: \(f.date, format: .dateTime.month().day()) → \(l.date, format: .dateTime.month().day())")
+                            .font(.system(size: 9)).foregroundStyle(.secondary)
+                        Text("收益率 \(totalChange >= 0 ? "+" : "")\(totalChange * 100, specifier: "%.2f")%")
+                            .font(.system(size: 9).bold()).foregroundStyle(totalChange >= 0 ? .red : .green)
                     }
                     Spacer()
-                    if let stats = rangeStats {
-                        Text("框选区间: \(stats.start.date, format: .dateTime.month().day()) → \(stats.end.date, format: .dateTime.month().day())")
+                    if rangeSelection != nil {
+                        Text("点击图表关闭框选")
                             .font(.system(size: 9)).foregroundStyle(.blue)
                     } else {
-                        Text("拖拽框选区间 · 点击清除")
+                        Text("拖拽框选区间")
                             .font(.system(size: 9)).foregroundStyle(.gray.opacity(0.4))
                     }
                 }
                 .padding(.top, 6)
             }
             .overlay(alignment: .topTrailing) {
-                // 框选区间统计面板
-                if let stats = rangeStats {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        HStack {
-                            Text("区间统计").font(.caption).bold()
-                            Spacer()
-                            Button("✕") { rangeSelection = nil }
-                                .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
+                // 框选区间统计面板 —— 始终显示只要有框选
+                if rangeSelection != nil {
+                    if let stats = rangeStats {
+                        VStack(alignment: .trailing, spacing: 6) {
+                            HStack {
+                                Text("区间统计").font(.caption).bold()
+                                Spacer()
+                                Button("✕") { rangeSelection = nil }
+                                    .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
+                            }
+                            Divider()
+                            statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
+                            statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
+                            statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
+                            Divider()
+                            statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
+                            statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
                         }
-                        Divider()
-                        statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
-                        statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
-                        statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
-                        Divider()
-                        statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
-                        statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
+                        .padding(10)
+                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                        .cornerRadius(8)
+                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        .frame(width: 200)
+                        .padding(8)
+                    } else {
+                        // 框选了但范围内无数据变化
+                        VStack(alignment: .trailing, spacing: 4) {
+                            HStack {
+                                Text("区间统计").font(.caption).bold()
+                                Spacer()
+                                Button("✕") { rangeSelection = nil }
+                                    .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
+                            }
+                            Divider()
+                            Text("该区间内无数据变化")
+                                .font(.caption).foregroundStyle(.secondary)
+                        }
+                        .padding(10)
+                        .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
+                        .cornerRadius(8)
+                        .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
+                        .frame(width: 200)
+                        .padding(8)
                     }
-                    .padding(10)
-                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
-                    .cornerRadius(8)
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    .frame(width: 200)
-                    .padding(8)
                 }
             }
         }
@@ -701,6 +720,16 @@ struct ContentView: View {
         isLoadingAdvice = true
         aiAdvice = nil
 
+        Task {
+            guard await WatchAuthManager.authenticate(reason: "使用 Apple Watch 验证以获取 AI 投资建议") else {
+                await MainActor.run { isLoadingAdvice = false; aiAdvice = nil }
+                return
+            }
+            await fetchAdviceFromAI()
+        }
+    }
+
+    private func fetchAdviceFromAI() async {
         let key = KeychainManager.load(key: "ai_api_key") ?? ""
         guard !key.isEmpty else {
             aiAdvice = "请先在设置中配置 AI API Key"

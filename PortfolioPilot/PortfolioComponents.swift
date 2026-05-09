@@ -50,6 +50,9 @@ struct StrategyPreviewCard: View {
     let result: SmartCalculationResult
     let assetList: [AssetItem]
     let onConfirm: () -> Void
+    var onAIOptimize: (() -> Void)? = nil
+    @State private var aiSuggestion: String?
+    @State private var aiLoading = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -64,6 +67,20 @@ struct StrategyPreviewCard: View {
                     }.font(.caption)
                 }
             }
+
+            if onAIOptimize != nil {
+                if aiLoading {
+                    HStack(spacing: 6) { ProgressView().scaleEffect(0.7); Text("AI 分析中...").font(.caption2).foregroundStyle(.secondary) }
+                } else {
+                    Button(action: { aiLoading = true; aiSuggestion = nil; onAIOptimize?() }) {
+                        HStack(spacing: 3) { Image(systemName: "brain"); Text("AI 优化建议").font(.caption2) }
+                    }.buttonStyle(.borderless).foregroundStyle(.blue)
+                }
+                if let suggestion = aiSuggestion {
+                    Text(suggestion).font(.caption).foregroundStyle(.blue).padding(6).background(Color.blue.opacity(0.05)).cornerRadius(4)
+                }
+            }
+
             Button("执行并更新", action: onConfirm).buttonStyle(.borderedProminent).frame(maxWidth: .infinity)
         }.padding().background(Color.purple.opacity(0.05)).cornerRadius(8)
     }
@@ -73,8 +90,8 @@ struct RebalanceDeviation {
     let categoryName: String
     let currentPct: Double
     let targetPct: Double
-    let deviation: Double      // 绝对偏离（百分比点）
-    let suggestion: String     // "减仓" or "增仓"
+    let deviation: Double
+    let suggestion: String
 }
 
 struct RebalanceAlertView: View {

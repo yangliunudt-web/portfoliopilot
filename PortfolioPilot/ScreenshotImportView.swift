@@ -128,7 +128,7 @@ struct ScreenshotImportView: View {
                 .disabled(image == nil)
                 .font(.title3)
 
-                Text("将使用 Touch ID 验证身份")
+                Text("将使用 Apple Watch 验证身份")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }
@@ -304,6 +304,12 @@ struct ScreenshotImportView: View {
         isLoading = true; errorMessage = nil
 
         Task {
+            // Apple Watch 验证
+            guard await WatchAuthManager.authenticate(reason: "使用 Apple Watch 验证以识别持仓截图") else {
+                await MainActor.run { isLoading = false }
+                return
+            }
+
             let key = KeychainManager.load(key: "ai_api_key") ?? ""
             guard !key.isEmpty else {
                 await MainActor.run {
