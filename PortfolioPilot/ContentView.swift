@@ -549,21 +549,12 @@ struct ContentView: View {
                                     DragGesture(minimumDistance: 2)
                                         .onChanged { value in
                                             isDraggingRange = true
-                                            // 使用 chartProxy.plotFrame 解析到 geometry 坐标
-                                            guard let anchor = chartProxy.plotFrame else { return }
-                                            let resolvedFrame = geometry[anchor]
-                                            let xPos = value.startLocation.x - resolvedFrame.minX
-                                            let xEnd = value.location.x - resolvedFrame.minX
-                                            let plotWidth = resolvedFrame.width
-                                            let nStart = max(0, min(1, xPos / plotWidth))
-                                            let nEnd = max(0, min(1, xEnd / plotWidth))
-
-                                            let domain = currentChartDomain
-                                            let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
-                                            let s = domain.lowerBound.addingTimeInterval(nStart * dur)
-                                            let e = domain.lowerBound.addingTimeInterval(nEnd * dur)
-
-                                            rangeSelection = min(s, e)...max(s, e)
+                                            // 用 chartProxy 直接把屏幕坐标转为日期
+                                            let startDate: Date? = chartProxy.value(atX: value.startLocation.x)
+                                            let endDate: Date? = chartProxy.value(atX: value.location.x)
+                                            if let s = startDate, let e = endDate {
+                                                rangeSelection = min(s, e)...max(s, e)
+                                            }
                                         }
                                         .onEnded { _ in
                                             isDraggingRange = false
@@ -799,14 +790,29 @@ struct ContentView: View {
                 return (0, 0)
             }
 
-            let fallbackPrin = assetList.items.filter { $0.category.rawValue == catName }.reduce(0) { $0 + $1.principal }
-            let fallbackVal = assetList.items.filter { $0.category.rawValue == catName }.reduce(0) { $0 + $1.value }
+            let currentCatVal = assetList.items.filter { $0.category.rawValue == catName }.reduce(0) { $0 + $1.value }
+            let currentCatPrin = assetList.items.filter { $0.category.rawValue == catName }.reduce(0) { $0 + $1.principal }
+            let currentTotalVal = assetList.items.reduce(0) { $0 + $1.value }
             let legacyVal = fallbackValue(for: catName, dict: dict)
 
-            let val = dict["CAT_\(catName)_V"] ?? (legacyVal > 0 ? legacyVal : fallbackVal)
-            let prin = dict["CAT_\(catName)_P"] ?? fallbackPrin
+            // 有真实分类数据 → 直接用；否则按比例从总市值估算
+            if let catVal = dict["CAT_\(catName)_V"], catVal > 0 {
+                let val = catVal
+                let prin = dict["CAT_\(catName)_P"] ?? currentCatPrin
+                return (val, prin)
+            } else if legacyVal > 0 {
+                let val = legacyVal
+                let prin = dict["CAT_\(catName)_P"] ?? currentCatPrin
+                return (val, prin)
+            } else if record.totalValue > 0, currentTotalVal > 0 {
+                // 估算：按当前分类占比 × 历史总市值
+                let ratio = currentCatVal / currentTotalVal
+                let estimatedVal = record.totalValue * ratio
+                let estimatedPrin = record.principal * ratio
+                return (estimatedVal, estimatedPrin)
+            }
 
-            return (val, prin)
+            return (currentCatVal, currentCatPrin)
         } else {
             return (record.totalValue, record.principal)
         }
