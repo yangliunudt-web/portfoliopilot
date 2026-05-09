@@ -424,7 +424,7 @@ struct ContentView: View {
                             // 本金虚线
                             ForEach(points) { point in
                                 LineMark(x: .value("Date", point.date), y: .value("Principal", point.principal), series: .value("Type", "本金"))
-                                    .interpolationMethod(.catmullRom)
+                                    .interpolationMethod(.stepCenter)
                                     .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
                                     .foregroundStyle(.gray.opacity(0.6))
                             }
@@ -436,7 +436,7 @@ struct ContentView: View {
                                     yStart: .value("Min", domainMin),
                                     yEnd: .value("Value", point.value)
                                 )
-                                .interpolationMethod(.catmullRom)
+                                .interpolationMethod(.stepCenter)
                                 .foregroundStyle(LinearGradient(
                                     colors: [catColor.opacity(0.5), catColor.opacity(0.1), .clear],
                                     startPoint: .top, endPoint: .bottom
@@ -446,7 +446,7 @@ struct ContentView: View {
                             // 市值主线
                             ForEach(points) { point in
                                 LineMark(x: .value("Date", point.date), y: .value("Value", point.value), series: .value("Type", "市值"))
-                                    .interpolationMethod(.catmullRom)
+                                    .interpolationMethod(.stepCenter)
                                     .foregroundStyle(catColor)
                                     .lineStyle(StrokeStyle(lineWidth: 2.5))
                             }

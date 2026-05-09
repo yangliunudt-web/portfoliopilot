@@ -1,6 +1,7 @@
 import SwiftUI
 import AppKit
 import UniformTypeIdentifiers
+import LocalAuthentication
 
 struct ScreenshotImportView: View {
     @Environment(\.dismiss) private var dismiss
@@ -19,10 +20,6 @@ struct ScreenshotImportView: View {
     @State private var stage: Stage = .input
 
     enum Stage { case input, preview }
-
-    private var apiKey: String {
-        KeychainManager.load(key: "ai_api_key") ?? ""
-    }
 
     var body: some View {
         VStack(spacing: 0) {
@@ -106,7 +103,7 @@ struct ScreenshotImportView: View {
     }
 
     private var hintText: some View {
-        Text("支持券商 App、支付宝基金、银行 App 等持仓页面截图。AI 会自动识别资产名称、大类、市值和本金。")
+        Text("支持券商 App、支付宝基金、银行 App 等持仓页面截图。点击识别后使用 Apple Watch 或 Touch ID 验证即可。")
             .font(.caption)
             .foregroundStyle(.secondary)
             .multilineTextAlignment(.center)
@@ -120,21 +117,21 @@ struct ScreenshotImportView: View {
                 Text("AI 正在分析截图...").font(.callout).foregroundStyle(.secondary)
             }
         } else {
-            Button(action: analyzeImage) {
-                HStack {
-                    Image(systemName: "wand.and.stars")
-                    Text("开始识别")
+            VStack(spacing: 8) {
+                Button(action: analyzeImage) {
+                    HStack {
+                        Image(systemName: "wand.and.stars")
+                        Text("开始识别")
+                    }
+                    .frame(minWidth: 160)
                 }
-                .frame(minWidth: 160)
-            }
-            .buttonStyle(.borderedProminent)
-            .disabled(image == nil || apiKey.isEmpty)
-            .font(.title3)
+                .buttonStyle(.borderedProminent)
+                .disabled(image == nil)
+                .font(.title3)
 
-            if apiKey.isEmpty {
-                Text("请先在「设置 → AI 截图识别」中配置 API Key")
-                    .font(.caption)
-                    .foregroundStyle(.orange)
+                Text("将使用 Apple Watch 或 Touch ID 验证身份")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
             }
         }
     }
@@ -298,6 +295,24 @@ struct ScreenshotImportView: View {
         return jaccard >= 0.55
     }
 
+    // MARK: - Apple Watch 认证
+
+    private func authenticateWithWatch() async -> Bool {
+        let context = LAContext()
+        context.localizedReason = "使用 Apple Watch 或 Touch ID 验证身份以识别持仓截图"
+        var error: NSError?
+        guard context.canEvaluatePolicy(.deviceOwnerAuthentication, error: &error) else {
+            await MainActor.run { errorMessage = "设备不支持生物认证: \(error?.localizedDescription ?? "")" }
+            return false
+        }
+        do {
+            return try await context.evaluatePolicy(.deviceOwnerAuthentication, localizedReason: "验证身份以使用 AI 截图识别")
+        } catch {
+            await MainActor.run { errorMessage = "验证取消或失败" }
+            return false
+        }
+    }
+
     // MARK: - 逻辑
 
     private func analyzeImage() {
@@ -305,8 +320,24 @@ struct ScreenshotImportView: View {
         isLoading = true; errorMessage = nil
 
         Task {
+            // 1. Apple Watch 认证
+            guard await authenticateWithWatch() else {
+                isLoading = false
+                return
+            }
+            // 2. 读取 KeyChain 中的 API Key
+            let key = KeychainManager.load(key: "ai_api_key") ?? ""
+            guard !key.isEmpty else {
+                await MainActor.run {
+                    isLoading = false
+                    errorMessage = "未配置 API Key，请先在设置中填写"
+                }
+                return
+            }
+
+            // 3. 调用 AI
             do {
-                let analyzer = ScreenshotAnalyzer(baseURL: aiBaseURL, apiKey: apiKey, model: aiModel)
+                let analyzer = ScreenshotAnalyzer(baseURL: aiBaseURL, apiKey: key, model: aiModel)
                 let result = try await analyzer.analyze(image: image)
                 await MainActor.run {
                     isLoading = false
