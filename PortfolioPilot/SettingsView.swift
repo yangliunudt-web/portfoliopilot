@@ -119,11 +119,14 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var manageAssetsSection: some View {
-        Section(header: Text("已有资产管理"), footer: Text("点击垃圾桶图标即可删除资产。")) {
+        Section(header: Text("已有资产管理"), footer: Text("名称可直接编辑，点击垃圾桶删除资产。")) {
             ForEach($assetList.items) { $asset in
                 HStack {
                     Circle().fill(asset.category.color).frame(width: 8, height: 8)
-                    Text(asset.name).bold()
+                    TextField("名称", text: $asset.name)
+                        .textFieldStyle(.plain)
+                        .bold()
+                        .frame(minWidth: 60)
                     Text("(\(asset.category.rawValue))").font(.caption).foregroundStyle(.secondary)
                     Spacer()
                     Text(asset.value, format: .currency(code: "CNY")).font(.caption).monospacedDigit()

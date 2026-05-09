@@ -3,13 +3,12 @@ import SwiftUI
 // MARK: - 辅助 UI 组件
 
 struct DualInputRow: View {
-    @Binding var name: String; @Binding var value: Double; @Binding var principal: Double; var color: Color
+    let name: String; @Binding var value: Double; @Binding var principal: Double; var color: Color
 
     var body: some View {
         HStack(alignment: .center) {
             Circle().fill(color).frame(width: 8, height: 8)
-            TextField("名称", text: $name)
-                .textFieldStyle(.plain)
+            Text(name)
                 .frame(width: 80, alignment: .leading)
                 .fixedSize(horizontal: false, vertical: true)
 

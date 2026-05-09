@@ -6,7 +6,8 @@ struct DetectedAsset: Identifiable, Equatable {
     var name: String
     var category: AssetCategory
     var value: Double
-    var principal: Double
+    var profit: Double
+    var principal: Double { max(0, value - profit) }
 }
 
 final class ScreenshotAnalyzer {
@@ -35,16 +36,18 @@ final class ScreenshotAnalyzer {
         let prompt = """
         你是一个投资组合数据提取助手。请识别图片中的所有持仓条目，返回 JSON 数组。
 
+        图中通常包含"市值/最新净值/持仓市值"（较大的数字）和"持有收益/累计盈亏/浮动盈亏"（带正负号或红绿色）。请分别提取。
+
         每个条目包含：
         - name: 资产名称（字符串）
         - category: 资产大类，必须是以下之一："A股"、"美股"、"贵金属"、"债券"、"现金"
-        - value: 当前市值（数字，单位：元）
-        - principal: 投入本金（数字，单位：元），如果图片中明确标注了持仓成本/本金则提取，否则设为 0
+        - value: 当前市值（数字，单位：元），取图中较大的那个数字列
+        - profit: 持有收益（数字，单位：元），取图中带正负号或红绿标记的盈亏列，正数为盈利，负数为亏损，若图中无盈亏列则设为 0
 
         返回格式示例：
         {
           "assets": [
-            {"name": "沪深300ETF", "category": "A股", "value": 50000.00, "principal": 45000.00}
+            {"name": "沪深300ETF", "category": "A股", "value": 50000.00, "profit": 5000.00}
           ]
         }
 
@@ -133,8 +136,8 @@ final class ScreenshotAnalyzer {
                   let catStr = item["category"] as? String,
                   let category = AssetCategory(rawValue: catStr),
                   let value = item["value"] as? Double else { return nil }
-            let principal = item["principal"] as? Double ?? value
-            return DetectedAsset(name: name, category: category, value: value, principal: principal)
+            let profit = item["profit"] as? Double ?? item["principal"] as? Double ?? 0
+            return DetectedAsset(name: name, category: category, value: value, profit: profit)
         }
     }
 }

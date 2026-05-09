@@ -296,29 +296,39 @@ struct ScreenshotImportView: View {
         return jaccard >= 0.55
     }
 
-    // MARK: - Touch ID 认证（macOS 上不使用 Apple Watch，用 Touch ID）
+    // MARK: - Apple Watch / Touch ID 认证
 
-    private func authenticateWithBiometrics() async -> Bool {
+    private func authenticateWithWatch() async -> Bool {
         guard !isAuthenticating else { return false }
         isAuthenticating = true
         defer { isAuthenticating = false }
 
         let context = LAContext()
-        context.localizedReason = "使用 Touch ID 验证身份以识别持仓截图"
+        let reason = "使用 Apple Watch 验证身份以识别持仓截图"
 
-        // 检查是否支持生物认证
+        // 1. 优先 Apple Watch
         var error: NSError?
-        guard context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) else {
-            // 无 Touch ID 的 Mac（如 Mac mini），直接放行
-            return true
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithWatch, error: &error) {
+            do {
+                return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithWatch, localizedReason: reason)
+            } catch {
+                await MainActor.run { errorMessage = "Apple Watch 验证取消或超时" }
+                return false
+            }
         }
 
-        do {
-            return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "验证身份以使用 AI 截图识别")
-        } catch {
-            await MainActor.run { errorMessage = "Touch ID 验证取消" }
-            return false
+        // 2. 其次 Touch ID
+        if context.canEvaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, error: &error) {
+            do {
+                return try await context.evaluatePolicy(.deviceOwnerAuthenticationWithBiometrics, localizedReason: "使用 Touch ID 验证身份")
+            } catch {
+                await MainActor.run { errorMessage = "Touch ID 验证取消" }
+                return false
+            }
         }
+
+        // 3. 都没有则直接放行（Mac mini 等无传感器设备）
+        return true
     }
 
     // MARK: - 逻辑
@@ -328,8 +338,8 @@ struct ScreenshotImportView: View {
         isLoading = true; errorMessage = nil
 
         Task {
-            // 1. Touch ID 验证（仅支持 Touch ID 的 Mac 需要，无传感器的直接通过）
-            guard await authenticateWithBiometrics() else {
+            // 1. Apple Watch / Touch ID 验证（无传感器的直接通过）
+            guard await authenticateWithWatch() else {
                 await MainActor.run { isLoading = false }
                 return
             }

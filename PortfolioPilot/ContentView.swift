@@ -221,16 +221,6 @@ struct ContentView: View {
         )
     }
 
-    func nameBinding(for id: UUID) -> Binding<String> {
-        Binding<String>(
-            get: { guard let idx = assetList.items.firstIndex(where: { $0.id == id }) else { return "" }; return assetList.items[idx].name },
-            set: { newValue in
-                guard let idx = assetList.items.firstIndex(where: { $0.id == id }), !newValue.trimmingCharacters(in: .whitespaces).isEmpty else { return }
-                assetList.items[idx].name = newValue
-            }
-        )
-    }
-
     func valueBinding(for id: UUID) -> Binding<Double> {
         Binding<Double>(
             get: { guard let idx = assetList.items.firstIndex(where: { $0.id == id }) else { return 0 }; return assetList.items[idx].value },
@@ -250,7 +240,7 @@ struct ContentView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(category.rawValue).font(.caption).bold().foregroundStyle(category.color)
                         ForEach(itemsInCategory) { item in
-                            DualInputRow(name: nameBinding(for: item.id), value: valueBinding(for: item.id), principal: principalBinding(for: item.id), color: category.color)
+                            DualInputRow(name: item.name, value: valueBinding(for: item.id), principal: principalBinding(for: item.id), color: category.color)
                         }
                     }
                     .padding(.bottom, 8)
