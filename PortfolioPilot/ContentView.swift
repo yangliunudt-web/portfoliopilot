@@ -49,6 +49,7 @@ struct ContentView: View {
     @State private var isLoadingAdvice = false
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
+    @AppStorage("aiTextModel") private var aiTextModel = "glm-4-flash"
 
     enum OperationMode: String, CaseIterable {
         case invest = "追加投资"
@@ -280,7 +281,7 @@ struct ContentView: View {
                 StatsDashboardView(totalValue: currentTotalValue, userPrincipal: totalUserPrincipal)
                 if currentTotalValue > 0 {
                     let check = checkRebalanceNeed(total: currentTotalValue)
-                    if check.isNeeded { RebalanceAlertView(messages: check.messages) { prepareRebalancePlan() } }
+                    if check.isNeeded { RebalanceAlertView(deviations: check.deviations) { prepareRebalancePlan() } }
                     aiAdviceCard
                 }
                 HStack(alignment: .top, spacing: 20) {
@@ -724,7 +725,7 @@ struct ContentView: View {
                     relThreshold: relThreshold,
                     apiBaseURL: aiBaseURL,
                     apiKey: key,
-                    model: aiModel
+                    model: aiTextModel
                 )
                 await MainActor.run {
                     aiAdvice = result
@@ -854,16 +855,28 @@ struct ContentView: View {
         saveRecord(); autoSaveManager.saveImmediately(); inputAmount = nil; calculationResult = nil; rebalancePlan = nil
     }
 
-    func checkRebalanceNeed(total: Double) -> (isNeeded: Bool, messages: [String]) {
-        var msgs: [String] = []
+    func checkRebalanceNeed(total: Double) -> (isNeeded: Bool, deviations: [RebalanceDeviation]) {
+        var devs: [RebalanceDeviation] = []
         var categoryValues: [AssetCategory: Double] = [.aShares:0, .usStocks:0, .gold:0, .bonds:0, .cash:0]
         for item in assetList.items { categoryValues[item.category, default: 0] += item.value }
         for cat in AssetCategory.allCases {
-            let tgt = targetRatio(for: cat); let pct = total > 0 ? (categoryValues[cat] ?? 0) / total : 0; let diff = pct - tgt; var trig = false
-            if tgt >= 0.20 { if abs(diff) > absThreshold { trig = true } } else if tgt > 0 { if abs(diff)/tgt > relThreshold { trig = true } }
-            if trig { msgs.append("大类 [\(cat.rawValue)] 偏离目标，建议\(diff > 0 ? "减仓" : "增仓")") }
+            let tgt = targetRatio(for: cat)
+            let pct = total > 0 ? (categoryValues[cat] ?? 0) / total : 0
+            let diff = pct - tgt
+            var trig = false
+            if tgt >= 0.20 { if abs(diff) > absThreshold { trig = true } }
+            else if tgt > 0 { if abs(diff) / tgt > relThreshold { trig = true } }
+            if trig {
+                devs.append(RebalanceDeviation(
+                    categoryName: cat.rawValue,
+                    currentPct: pct,
+                    targetPct: tgt,
+                    deviation: diff,
+                    suggestion: diff > 0 ? "减仓" : "增仓"
+                ))
+            }
         }
-        return (!msgs.isEmpty, msgs)
+        return (!devs.isEmpty, devs)
     }
 
     func saveRecord() {

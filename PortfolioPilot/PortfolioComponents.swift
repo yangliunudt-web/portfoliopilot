@@ -69,7 +69,51 @@ struct StrategyPreviewCard: View {
     }
 }
 
+struct RebalanceDeviation {
+    let categoryName: String
+    let currentPct: Double
+    let targetPct: Double
+    let deviation: Double      // 绝对偏离（百分比点）
+    let suggestion: String     // "减仓" or "增仓"
+}
+
 struct RebalanceAlertView: View {
-    let messages: [String]; let onFix: () -> Void
-    var body: some View { HStack { VStack(alignment: .leading) { Label("触发大类再平衡信号", systemImage: "exclamationmark.triangle.fill").foregroundStyle(.orange).font(.headline); ForEach(messages, id: \.self) { msg in Text("  " + msg).font(.caption).foregroundStyle(.secondary) } }; Spacer(); Button("查看大类调仓方案") { onFix() }.buttonStyle(.bordered) }.padding().background(Color.orange.opacity(0.08)).cornerRadius(10).overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.3), lineWidth: 1)) }
+    let deviations: [RebalanceDeviation]
+    let onFix: () -> Void
+
+    var body: some View {
+        HStack {
+            VStack(alignment: .leading, spacing: 6) {
+                Label("触发大类再平衡信号", systemImage: "exclamationmark.triangle.fill")
+                    .foregroundStyle(.orange).font(.headline)
+
+                ForEach(deviations.indices, id: \.self) { i in
+                    let d = deviations[i]
+                    HStack(spacing: 6) {
+                        Text("\(d.categoryName)")
+                            .font(.caption).bold()
+                        Text("当前 \(String(format: "%.1f", d.currentPct * 100))%")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text("→ 目标 \(String(format: "%.1f", d.targetPct * 100))%")
+                            .font(.caption).foregroundStyle(.secondary)
+                        Text("偏离 \(d.deviation >= 0 ? "+" : "")\(String(format: "%.1f", d.deviation * 100))%")
+                            .font(.caption).bold()
+                            .foregroundStyle(d.deviation >= 0 ? .red : .green)
+                        Text(d.suggestion)
+                            .font(.caption2)
+                            .foregroundStyle(.white)
+                            .padding(.horizontal, 4).padding(.vertical, 1)
+                            .background(d.deviation >= 0 ? Color.red.opacity(0.7) : Color.green.opacity(0.7))
+                            .cornerRadius(3)
+                    }
+                }
+            }
+            Spacer()
+            Button("查看大类调仓方案") { onFix() }.buttonStyle(.bordered)
+        }
+        .padding()
+        .background(Color.orange.opacity(0.08))
+        .cornerRadius(10)
+        .overlay(RoundedRectangle(cornerRadius: 10).stroke(Color.orange.opacity(0.3), lineWidth: 1))
+    }
 }

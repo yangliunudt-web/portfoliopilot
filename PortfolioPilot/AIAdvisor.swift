@@ -80,14 +80,30 @@ struct AIAdvisor {
             throw AdvisorError.httpError(httpResponse.statusCode, rbody)
         }
 
-        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
-              let choices = json["choices"] as? [[String: Any]],
-              let first = choices.first,
-              let message = first["message"] as? [String: Any],
-              let content = message["content"] as? String else {
+        let rawBody = String(data: data, encoding: .utf8) ?? ""
+        print("[AI Advisor] Raw response: \(rawBody.prefix(500))")
+
+        guard let json = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            print("[AI Advisor] Root JSON parse failed")
             throw AdvisorError.parseFailed
         }
 
+        if let error = json["error"] as? [String: Any],
+           let msg = error["message"] as? String {
+            print("[AI Advisor] API error: \(msg)")
+            throw AdvisorError.httpError(0, msg)
+        }
+
+        guard let choices = json["choices"] as? [[String: Any]],
+              let first = choices.first,
+              let message = first["message"] as? [String: Any],
+              let content = message["content"] as? String,
+              !content.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+            print("[AI Advisor] Content missing or empty in response")
+            throw AdvisorError.parseFailed
+        }
+
+        print("[AI Advisor] Content: \(content.prefix(200))")
         return content.trimmingCharacters(in: .whitespacesAndNewlines)
     }
 }

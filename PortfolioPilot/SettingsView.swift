@@ -23,8 +23,10 @@ struct SettingsView: View {
 
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
+    @AppStorage("aiTextModel") private var aiTextModel = "glm-4-flash"
     @State private var apiKeyInput = ""
     @State private var keyRevealed = false
+    @State private var originalKey = ""  // 追踪原始值，只在改变时保存
     @State private var testResult: String?
 
     var totalTarget: Double { bondTarget + nasdaqTarget + goldTarget + csiTarget + cashTarget }
@@ -233,9 +235,18 @@ struct SettingsView: View {
                     .font(.caption)
             }
             HStack {
-                Text("模型名称")
+                Text("视觉模型")
                 Spacer()
-                TextField("qwen-vl-max", text: $aiModel)
+                TextField("glm-5v-turbo", text: $aiModel)
+                    .multilineTextAlignment(.trailing)
+                    .textFieldStyle(.roundedBorder)
+                    .frame(width: 180)
+                    .font(.caption)
+            }
+            HStack {
+                Text("文本模型")
+                Spacer()
+                TextField("glm-4-flash", text: $aiTextModel)
                     .multilineTextAlignment(.trailing)
                     .textFieldStyle(.roundedBorder)
                     .frame(width: 180)
@@ -252,14 +263,17 @@ struct SettingsView: View {
                     .disabled(!keyRevealed)
                 Button(keyRevealed ? "保存" : "查看") {
                     if keyRevealed {
-                        if apiKeyInput.isEmpty {
-                            KeychainManager.delete(key: "ai_api_key")
-                        } else {
-                            KeychainManager.save(key: "ai_api_key", value: apiKeyInput)
+                        if apiKeyInput != originalKey {
+                            if apiKeyInput.isEmpty {
+                                KeychainManager.delete(key: "ai_api_key")
+                            } else {
+                                KeychainManager.save(key: "ai_api_key", value: apiKeyInput)
+                            }
                         }
                         keyRevealed = false
                     } else {
-                        apiKeyInput = KeychainManager.load(key: "ai_api_key") ?? ""
+                        originalKey = KeychainManager.load(key: "ai_api_key") ?? ""
+                        apiKeyInput = originalKey
                         keyRevealed = true
                     }
                 }.font(.caption2)
@@ -277,7 +291,7 @@ struct SettingsView: View {
         } header: {
             Text("AI 截图识别")
         } footer: {
-            Text("当前默认使用智谱 GLM-4V-Turbo，也支持通义千问等 OpenAI 兼容接口。API Key 安全存储在系统钥匙串中。")
+            Text("视觉模型用于截图识别，文本模型用于 AI 投资建议。支持所有 OpenAI 兼容接口。")
         }
     }
 
