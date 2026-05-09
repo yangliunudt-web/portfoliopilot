@@ -180,6 +180,11 @@ struct ContentView: View {
         .onAppear {
             migrateOldDataIfNeeded()
             autoSaveManager.modelContext = modelContext
+            // Keychain → @AppStorage 迁移
+            if apiKey.isEmpty, let oldKey = KeychainManager.load(key: "ai_api_key"), !oldKey.isEmpty {
+                apiKey = oldKey
+                KeychainManager.delete(key: "ai_api_key")
+            }
         }
     }
 
@@ -426,16 +431,15 @@ struct ContentView: View {
             let domainMax = maxY
 
             let lastPoint = points.last
-            let firstPoint = points.first
+            // 跳过起始零点（单类资产早期可能无数据），用第一个非零点做基线
+            let firstPoint = points.first(where: { $0.value > 0 })
             let totalChange: Double = {
                 guard let f = firstPoint, let l = lastPoint else { return 0 }
                 if f.principal > 0 {
                     return (l.value / l.principal) - (f.value / f.principal)
-                } else if f.value > 0 {
-                    // 单类资产可能无本金数据，用市值变化率
+                } else {
                     return (l.value / f.value) - 1
                 }
-                return 0
             }()
 
             VStack(spacing: 0) {
@@ -732,14 +736,7 @@ struct ContentView: View {
         guard currentTotalValue > 0 else { return }
         isLoadingAdvice = true
         aiAdvice = nil
-
-        Task {
-            guard await WatchAuthManager.authenticate(reason: "使用 Apple Watch 验证以获取 AI 调仓建议") else {
-                await MainActor.run { isLoadingAdvice = false; aiAdvice = nil }
-                return
-            }
-            await fetchAdviceFromAI()
-        }
+        Task { await fetchAdviceFromAI() }
     }
 
     private func fetchAdviceFromAI() async {

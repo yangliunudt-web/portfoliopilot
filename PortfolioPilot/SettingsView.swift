@@ -86,6 +86,13 @@ struct SettingsView: View {
             }
             .alert("导入成功", isPresented: $showImportSuccess) { Button("OK") { dismiss() } }
         }.frame(minWidth: 450, minHeight: 650)
+        .onAppear {
+            // 从 Keychain 迁移到 @AppStorage（仅首次）
+            if apiKey.isEmpty, let oldKey = KeychainManager.load(key: "ai_api_key"), !oldKey.isEmpty {
+                apiKey = oldKey
+                KeychainManager.delete(key: "ai_api_key")
+            }
+        }
     }
 
     @ViewBuilder
