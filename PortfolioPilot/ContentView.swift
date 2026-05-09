@@ -47,6 +47,8 @@ struct ContentView: View {
     // AI 投资建议
     @State private var aiAdvice: String?
     @State private var isLoadingAdvice = false
+    @State private var aiScheduleSuggestion: String?
+    @State private var isLoadingScheduleAI = false
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
     @AppStorage("ai_api_key") private var apiKey = ""
@@ -228,7 +230,14 @@ struct ContentView: View {
             }.padding(10).background(Color(nsColor: .controlBackgroundColor)).cornerRadius(8).overlay(RoundedRectangle(cornerRadius: 8).stroke(Color.secondary.opacity(0.1), lineWidth: 1))
 
             if let result = calculationResult, let amount = inputAmount, amount > 0 {
-                StrategyPreviewCard(result: result, assetList: assetList.items) { applySmartPlan(result: result, amount: amount) }
+                StrategyPreviewCard(
+                    result: result,
+                    assetList: assetList.items,
+                    onConfirm: { applySmartPlan(result: result, amount: amount) },
+                    onAIOptimize: { fetchScheduleAI(result: result, amount: amount) },
+                    aiSuggestion: aiScheduleSuggestion,
+                    aiLoading: isLoadingScheduleAI
+                )
             }
         }
     }
@@ -556,16 +565,15 @@ struct ContentView: View {
                                     DragGesture(minimumDistance: 2)
                                         .onChanged { value in
                                             isDraggingRange = true
-                                            let points = chartDataPoints
-                                            guard points.count >= 2 else { return }
-                                            // 用绘图区域百分比 → 数据点索引，精确对应台阶位置
-                                            let frame = chartProxy.plotFrame.flatMap { proxy in geometry[proxy] } ?? geometry.frame(in: .local)
-                                            let ratioStart = max(0, min(1, (value.startLocation.x - frame.minX) / frame.width))
-                                            let ratioEnd = max(0, min(1, (value.location.x - frame.minX) / frame.width))
-                                            let idxStart = Int(ratioStart * Double(points.count - 1))
-                                            let idxEnd = Int(ratioEnd * Double(points.count - 1))
-                                            let s = points[min(points.count - 1, max(0, idxStart))].date
-                                            let e = points[min(points.count - 1, max(0, idxEnd))].date
+                                            let w = geometry.size.width
+                                            guard w > 0 else { return }
+                                            // 简单百分比映射（轴标签占一小部分，整体偏移可接受）
+                                            let r1 = max(0, min(1, value.startLocation.x / w))
+                                            let r2 = max(0, min(1, value.location.x / w))
+                                            let domain = currentChartDomain
+                                            let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
+                                            let s = domain.lowerBound.addingTimeInterval(r1 * dur)
+                                            let e = domain.lowerBound.addingTimeInterval(r2 * dur)
                                             rangeSelection = min(s, e)...max(s, e)
                                         }
                                         .onEnded { _ in
@@ -744,6 +752,76 @@ struct ContentView: View {
         .padding()
         .background(Color(nsColor: .controlBackgroundColor))
         .cornerRadius(10)
+    }
+
+    private func fetchScheduleAI(result: SmartCalculationResult, amount: Double) {
+        guard !apiKey.isEmpty else {
+            aiScheduleSuggestion = "请先在设置中配置 API Key"
+            return
+        }
+        isLoadingScheduleAI = true
+        aiScheduleSuggestion = nil
+
+        // 构建 plan 摘要
+        var planLines = ""
+        for (key, amt) in result.plan where abs(amt) > 0.01 {
+            if key.hasPrefix("NEW_") { continue }
+            if let id = UUID(uuidString: key), let a = assetList.items.first(where: { $0.id == id }) {
+                planLines += "\(a.name): \(amt >= 0 ? "+" : "")\(String(format: "%.0f", amt))\n"
+            }
+        }
+
+        let prompt = """
+        你是调仓简化助手。系统算出以下方案需要调整多笔资产。请给出最少交易次数的简化方案。
+
+        操作类型：\(operationMode == .invest ? "追加投资" : "资金提现") ¥\(String(format: "%.0f", amount))
+        系统方案（全部调整项）：
+        \(planLines)
+
+        要求：合并相邻资产的调整、舍去微小变动(<¥100)、用最少的 1-2 笔操作达到相近效果。回复格式：
+        简化为：资产名 ±¥xxx，资产名 ±¥xxx
+        30字以内。
+        """
+
+        Task {
+            do {
+                let base = aiBaseURL.hasSuffix("/") ? String(aiBaseURL.dropLast()) : aiBaseURL
+                let url = URL(string: "\(base)/chat/completions")!
+                var req = URLRequest(url: url)
+                req.httpMethod = "POST"
+                req.setValue("application/json", forHTTPHeaderField: "Content-Type")
+                req.setValue("Bearer \(apiKey)", forHTTPHeaderField: "Authorization")
+                req.timeoutInterval = 20
+                let body: [String: Any] = [
+                    "model": aiTextModel,
+                    "messages": [["role": "user", "content": prompt]],
+                    "max_tokens": 150,
+                    "temperature": 0.2
+                ]
+                req.httpBody = try JSONSerialization.data(withJSONObject: body)
+
+                let (data, _) = try await URLSession.shared.data(for: req)
+                if let json = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+                   let choices = json["choices"] as? [[String: Any]],
+                   let msg = choices.first?["message"] as? [String: Any],
+                   let content = msg["content"] as? String {
+                    await MainActor.run {
+                        aiScheduleSuggestion = content.trimmingCharacters(in: .whitespacesAndNewlines)
+                        isLoadingScheduleAI = false
+                    }
+                } else {
+                    await MainActor.run {
+                        aiScheduleSuggestion = "AI 返回解析失败"
+                        isLoadingScheduleAI = false
+                    }
+                }
+            } catch {
+                await MainActor.run {
+                    aiScheduleSuggestion = "请求失败: \(error.localizedDescription)"
+                    isLoadingScheduleAI = false
+                }
+            }
+        }
     }
 
     private func fetchAIAdvice() {

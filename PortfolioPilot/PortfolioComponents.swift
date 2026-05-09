@@ -51,8 +51,8 @@ struct StrategyPreviewCard: View {
     let assetList: [AssetItem]
     let onConfirm: () -> Void
     var onAIOptimize: (() -> Void)? = nil
-    @State private var aiSuggestion: String?
-    @State private var aiLoading = false
+    var aiSuggestion: String? = nil
+    var aiLoading: Bool = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
@@ -71,13 +71,12 @@ struct StrategyPreviewCard: View {
             if onAIOptimize != nil {
                 if aiLoading {
                     HStack(spacing: 6) { ProgressView().scaleEffect(0.7); Text("AI 分析中...").font(.caption2).foregroundStyle(.secondary) }
-                } else {
-                    Button(action: { aiLoading = true; aiSuggestion = nil; onAIOptimize?() }) {
-                        HStack(spacing: 3) { Image(systemName: "brain"); Text("AI 优化建议").font(.caption2) }
-                    }.buttonStyle(.borderless).foregroundStyle(.blue)
-                }
-                if let suggestion = aiSuggestion {
+                } else if let suggestion = aiSuggestion {
                     Text(suggestion).font(.caption).foregroundStyle(.blue).padding(6).background(Color.blue.opacity(0.05)).cornerRadius(4)
+                } else {
+                    Button(action: { onAIOptimize?() }) {
+                        HStack(spacing: 3) { Image(systemName: "brain"); Text("AI 简化建议").font(.caption2) }
+                    }.buttonStyle(.borderless).foregroundStyle(.blue)
                 }
             }
 
