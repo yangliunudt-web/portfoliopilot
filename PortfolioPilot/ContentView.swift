@@ -139,13 +139,20 @@ struct ContentView: View {
     var rangeStats: (start: ChartDataPoint, end: ChartDataPoint, valueChange: Double, principalChange: Double, yield: Double, annualizedYield: Double)? {
         guard let range = rangeSelection else { return nil }
         let points = chartDataPoints
+        guard points.count >= 2 else { return nil }
 
-        // 找到区间内的第一个和最后一个点（允许相同点）
+        // 用日期找到精确索引
         guard let startIdx = points.firstIndex(where: { $0.date >= range.lowerBound }),
-              let endIdx = points.lastIndex(where: { $0.date <= range.upperBound }) else { return nil }
+              let endIdx = points.lastIndex(where: { $0.date <= range.upperBound }),
+              startIdx <= endIdx else { return nil }
 
-        let startPoint = points[max(0, startIdx - 1)]  // 取前一个点做基线
+        // 基线取起点前一个数据点（测量区间内的变化量）
+        let baselineIdx = max(0, startIdx - 1)
+        let startPoint = points[baselineIdx]
         let endPoint = points[endIdx]
+
+        // 如果基线和终点是同一个点 → 无变化
+        guard baselineIdx != endIdx else { return nil }
 
         let valueChange = endPoint.value - startPoint.value
         let principalChange = endPoint.principal - startPoint.principal
@@ -549,12 +556,17 @@ struct ContentView: View {
                                     DragGesture(minimumDistance: 2)
                                         .onChanged { value in
                                             isDraggingRange = true
-                                            // 用 chartProxy 直接把屏幕坐标转为日期
-                                            let startDate: Date? = chartProxy.value(atX: value.startLocation.x)
-                                            let endDate: Date? = chartProxy.value(atX: value.location.x)
-                                            if let s = startDate, let e = endDate {
-                                                rangeSelection = min(s, e)...max(s, e)
-                                            }
+                                            let points = chartDataPoints
+                                            guard points.count >= 2 else { return }
+                                            // 用绘图区域百分比 → 数据点索引，精确对应台阶位置
+                                            let frame = chartProxy.plotFrame.flatMap { proxy in geometry[proxy] } ?? geometry.frame(in: .local)
+                                            let ratioStart = max(0, min(1, (value.startLocation.x - frame.minX) / frame.width))
+                                            let ratioEnd = max(0, min(1, (value.location.x - frame.minX) / frame.width))
+                                            let idxStart = Int(ratioStart * Double(points.count - 1))
+                                            let idxEnd = Int(ratioEnd * Double(points.count - 1))
+                                            let s = points[min(points.count - 1, max(0, idxStart))].date
+                                            let e = points[min(points.count - 1, max(0, idxEnd))].date
+                                            rangeSelection = min(s, e)...max(s, e)
                                         }
                                         .onEnded { _ in
                                             isDraggingRange = false
