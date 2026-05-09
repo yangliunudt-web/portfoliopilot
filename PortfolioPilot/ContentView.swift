@@ -559,23 +559,24 @@ struct ContentView: View {
                             }
                         }
                         .chartOverlay { chartProxy in
-                            Color.clear
-                                .contentShape(Rectangle())
-                                .gesture(
-                                    DragGesture(minimumDistance: 2)
-                                        .onChanged { value in
-                                            isDraggingRange = true
-                                            let w = geometry.size.width
-                                            guard w > 0 else { return }
-                                            // 简单百分比映射（轴标签占一小部分，整体偏移可接受）
-                                            let r1 = max(0, min(1, value.startLocation.x / w))
-                                            let r2 = max(0, min(1, value.location.x / w))
-                                            let domain = currentChartDomain
-                                            let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
-                                            let s = domain.lowerBound.addingTimeInterval(r1 * dur)
-                                            let e = domain.lowerBound.addingTimeInterval(r2 * dur)
-                                            rangeSelection = min(s, e)...max(s, e)
-                                        }
+                            // 内嵌 GeometryReader 确保手势坐标和宽度在同一坐标空间
+                            GeometryReader { overlayGeo in
+                                Color.clear
+                                    .contentShape(Rectangle())
+                                    .gesture(
+                                        DragGesture(minimumDistance: 2)
+                                            .onChanged { value in
+                                                isDraggingRange = true
+                                                let w = overlayGeo.size.width
+                                                guard w > 0 else { return }
+                                                let r1 = max(0, min(1, value.startLocation.x / w))
+                                                let r2 = max(0, min(1, value.location.x / w))
+                                                let domain = currentChartDomain
+                                                let dur = domain.upperBound.timeIntervalSince(domain.lowerBound)
+                                                let s = domain.lowerBound.addingTimeInterval(r1 * dur)
+                                                let e = domain.lowerBound.addingTimeInterval(r2 * dur)
+                                                rangeSelection = min(s, e)...max(s, e)
+                                            }
                                         .onEnded { _ in
                                             isDraggingRange = false
                                         }
@@ -585,6 +586,7 @@ struct ContentView: View {
                                         rangeSelection = nil
                                     }
                                 )
+                            }
                         }
 
                         // 拖动日期标签
@@ -772,14 +774,20 @@ struct ContentView: View {
         }
 
         let prompt = """
-        你是调仓简化助手。系统算出以下方案需要调整多笔资产。请给出最少交易次数的简化方案。
+        你是调仓优化助手。系统算出的各资产调整方案如下：
 
-        操作类型：\(operationMode == .invest ? "追加投资" : "资金提现") ¥\(String(format: "%.0f", amount))
-        系统方案（全部调整项）：
+        操作：\(operationMode == .invest ? "追加 ¥\(String(format: "%.0f", amount))" : "提现 ¥\(String(format: "%.0f", amount))")
+        各资产调整：
         \(planLines)
 
-        要求：合并相邻资产的调整、舍去微小变动(<¥100)、用最少的 1-2 笔操作达到相近效果。回复格式：
-        简化为：资产名 ±¥xxx，资产名 ±¥xxx
+        约束（必须遵守）：
+        1. 总金额守恒：所有资产的 ± 金额相加必须等于原始操作金额（追加=正，提现=负）
+        2. 参考大类平衡：优先调整偏离目标比例最远的资产
+        3. 合并同类调整：同一大类内可以合并，但总金额不能变
+        4. 不做舍入：不能因为金额小而忽略，必须保持总额精确
+
+        回复格式：
+        资产名 ±¥xxx，资产名 ±¥xxx（总额=操作金额）
         30字以内。
         """
 
