@@ -37,6 +37,7 @@ struct ContentView: View {
     @State private var rawSelectedDate: Date?
     @State private var rangeSelection: ClosedRange<Date>? = nil
     @State private var isDraggingRange = false
+    @State private var showProfitColor = false
 
     @State private var selectedTimeRange: ChartTimeRange = .oneMonth
     @State private var customStartDate: Date = Calendar.current.date(byAdding: .month, value: -1, to: Date()) ?? Date()
@@ -220,7 +221,11 @@ struct ContentView: View {
             Picker("操作", selection: $operationMode) { ForEach(OperationMode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented)
             HStack {
                 Text("¥").foregroundStyle(.secondary).font(.title2)
-                TextField("输入操作金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).font(.title2)
+                TextField("输入操作金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2)))
+                    .textFieldStyle(.plain)
+                    .font(.title2)
+                    .multilineTextAlignment(.center)
+                    .foregroundStyle(.primary)
                     .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
                     .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
             }.padding(10).glassEffect(in: RoundedRectangle(cornerRadius: 12))
@@ -371,7 +376,7 @@ struct ContentView: View {
                         if !items.isEmpty {
                             let totalVal = items.reduce(0) { $0 + $1.value }
                             let totalPrin = items.reduce(0) { $0 + $1.principal }
-                            AssetDetailRow(name: cat.rawValue, value: totalVal, principal: totalPrin, color: cat.color, percentage: currentTotalValue > 0 ? totalVal / currentTotalValue : nil)
+                            AssetDetailRow(name: cat.rawValue, value: totalVal, principal: totalPrin, color: cat.color, percentage: currentTotalValue > 0 ? totalVal / currentTotalValue : nil, deviation: currentTotalValue > 0 ? (totalVal / currentTotalValue) - targetRatio(for: cat) : nil)
                         }
                     }
                 }
@@ -400,7 +405,14 @@ struct ContentView: View {
         let displayPrin = displayRecord?.principal ?? 0
         let displayProfit = displayVal - displayPrin
         let titleName = activeCategoryName ?? "总资产"
-        let catColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
+        let baseColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
+        // 收益趋势颜色：正红负绿，未启用时用原色
+        let catColor: Color = {
+            if showProfitColor {
+                return displayProfit >= 0 ? .red : .green
+            }
+            return baseColor
+        }()
 
         HStack(alignment: .bottom) {
             VStack(alignment: .leading) {
@@ -424,6 +436,20 @@ struct ContentView: View {
             HStack(spacing: 15) {
                 HStack(spacing: 4) { Circle().fill(catColor).frame(width: 6, height: 6); Text(titleName).font(.caption) }
                 HStack(spacing: 4) { Rectangle().fill(Color.gray).frame(width: 12, height: 2); Text("本金").font(.caption) }
+                Button(action: {
+                    withAnimation(.easeInOut(duration: 0.6)) { showProfitColor.toggle() }
+                }) {
+                    HStack(spacing: 3) {
+                        Image(systemName: showProfitColor ? "chart.line.uptrend.xyaxis" : "chart.line.downtrend.xyaxis")
+                            .font(.caption2)
+                        Text("收益趋势")
+                            .font(.caption2)
+                    }
+                    .foregroundStyle(showProfitColor ? .red : .secondary)
+                    .padding(.horizontal, 8).padding(.vertical, 3)
+                }
+                .buttonStyle(.borderless)
+                .glassEffect(in: Capsule())
             }
         }.padding(.bottom, 10)
     }

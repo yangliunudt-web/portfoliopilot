@@ -21,7 +21,7 @@ struct DualInputRow: View {
 }
 
 struct AssetDetailRow: View {
-    let name: String; let value: Double; let principal: Double; let color: Color; var percentage: Double? = nil
+    let name: String; let value: Double; let principal: Double; let color: Color; var percentage: Double? = nil; var deviation: Double? = nil
     var ret: Double { principal > 0 ? (value - principal) / principal : 0 }
     var body: some View {
         VStack(spacing: 0) {
@@ -32,6 +32,11 @@ struct AssetDetailRow: View {
                     if let pct = percentage {
                         Text("\(String(format: "%.1f", pct * 100))%")
                             .font(.caption2).foregroundStyle(color)
+                        if let dev = deviation, abs(dev) > 0.001 {
+                            Text("(\(dev >= 0 ? "+" : "")\(String(format: "%.1f", dev * 100))%)")
+                                .font(.caption2)
+                                .foregroundStyle(dev >= 0 ? .red : .green)
+                        }
                     }
                 }
                 Spacer()

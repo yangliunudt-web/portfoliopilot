@@ -49,18 +49,7 @@ struct ScreenshotImportView: View {
         VStack(spacing: 24) {
             Spacer()
             pasteZone
-            hintText
-            if let img = image {
-                Image(nsImage: img)
-                    .resizable()
-                    .scaledToFit()
-                    .frame(maxHeight: 250)
-                    .cornerRadius(8)
-                    .shadow(radius: 4)
-                    .contextMenu {
-                        Button("清除图片") { image = nil }
-                    }
-            }
+            if image == nil { hintText }
             if let error = errorMessage {
                 Text(error).font(.callout).foregroundStyle(.red)
             }
@@ -73,18 +62,24 @@ struct ScreenshotImportView: View {
     private var pasteZone: some View {
         ZStack {
             RoundedRectangle(cornerRadius: 12)
-                .stroke(style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                .stroke(style: StrokeStyle(lineWidth: 2, dash: image == nil ? [6, 4] : []))
                 .foregroundStyle(image != nil ? .green.opacity(0.5) : .secondary.opacity(0.3))
-                .frame(height: 140)
 
-            VStack(spacing: 12) {
-                Image(systemName: image != nil ? "checkmark.circle.fill" : "doc.on.clipboard")
-                    .font(.system(size: 36))
-                    .foregroundStyle(image != nil ? .green : .secondary)
-                Text(image != nil ? "图片已就绪" : "在此区域 Cmd+V 粘贴截图")
-                    .font(.title3)
-                    .foregroundStyle(image != nil ? .green : .secondary)
-                if image == nil {
+            if let img = image {
+                Image(nsImage: img)
+                    .resizable()
+                    .scaledToFit()
+                    .cornerRadius(10)
+                    .padding(4)
+                    .contextMenu { Button("清除图片") { image = nil } }
+            } else {
+                VStack(spacing: 12) {
+                    Image(systemName: "doc.on.clipboard")
+                        .font(.system(size: 36))
+                        .foregroundStyle(.secondary)
+                    Text("在此区域 Cmd+V 粘贴截图")
+                        .font(.title3)
+                        .foregroundStyle(.secondary)
                     Button("或点击选择图片文件...") {
                         selectImageFile()
                     }
@@ -92,6 +87,7 @@ struct ScreenshotImportView: View {
                 }
             }
         }
+        .frame(height: 200)
         .onPasteCommand(of: [.image]) { providers in
             guard let provider = providers.first else { return }
             _ = provider.loadDataRepresentation(for: .image) { data, _ in
