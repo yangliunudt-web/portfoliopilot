@@ -103,10 +103,24 @@ struct ScreenshotImportView: View {
     }
 
     private var hintText: some View {
-        Text("支持券商 App、支付宝基金、银行 App 等持仓页面截图。点击识别后使用 Apple Watch 或 Touch ID 验证即可。")
-            .font(.caption)
-            .foregroundStyle(.secondary)
-            .multilineTextAlignment(.center)
+        HStack(spacing: 12) {
+            aiFeatureHint(icon: "eye", text: "视觉识别", sub: "自动提取持仓数据")
+            aiFeatureHint(icon: "text.magnifyingglass", text: "智能匹配", sub: "模糊关联现有资产")
+            aiFeatureHint(icon: "arrow.up.arrow.down", text: "一键更新", sub: "市值本金同步调整")
+        }
+    }
+
+    private func aiFeatureHint(icon: String, text: String, sub: String) -> some View {
+        VStack(spacing: 4) {
+            Image(systemName: icon)
+                .font(.title3)
+                .foregroundStyle(.blue)
+                .frame(width: 32, height: 32)
+                .glassEffect(in: Circle())
+            Text(text).font(.caption).bold()
+            Text(sub).font(.caption2).foregroundStyle(.secondary)
+        }
+        .frame(maxWidth: .infinity)
     }
 
     @ViewBuilder

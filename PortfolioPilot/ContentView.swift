@@ -220,7 +220,7 @@ struct ContentView: View {
             Picker("操作", selection: $operationMode) { ForEach(OperationMode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented)
             HStack {
                 Text("¥").foregroundStyle(.secondary).font(.title2)
-                TextField("金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).font(.title2)
+                TextField("输入操作金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2))).textFieldStyle(.plain).font(.title2)
                     .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
                     .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
             }.padding(10).glassEffect(in: RoundedRectangle(cornerRadius: 12))
@@ -371,7 +371,7 @@ struct ContentView: View {
                         if !items.isEmpty {
                             let totalVal = items.reduce(0) { $0 + $1.value }
                             let totalPrin = items.reduce(0) { $0 + $1.principal }
-                            AssetDetailRow(name: cat.rawValue, value: totalVal, principal: totalPrin, color: cat.color)
+                            AssetDetailRow(name: cat.rawValue, value: totalVal, principal: totalPrin, color: cat.color, percentage: currentTotalValue > 0 ? totalVal / currentTotalValue : nil)
                         }
                     }
                 }

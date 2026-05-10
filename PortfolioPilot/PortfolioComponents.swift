@@ -21,12 +21,20 @@ struct DualInputRow: View {
 }
 
 struct AssetDetailRow: View {
-    let name: String; let value: Double; let principal: Double; let color: Color
+    let name: String; let value: Double; let principal: Double; let color: Color; var percentage: Double? = nil
     var ret: Double { principal > 0 ? (value - principal) / principal : 0 }
     var body: some View {
         VStack(spacing: 0) {
             HStack {
-                HStack { Circle().fill(color).frame(width: 8, height: 8); Text(name).font(.callout) }; Spacer()
+                HStack {
+                    Circle().fill(color).frame(width: 8, height: 8)
+                    Text(name).font(.callout)
+                    if let pct = percentage {
+                        Text("\(String(format: "%.1f", pct * 100))%")
+                            .font(.caption2).foregroundStyle(color)
+                    }
+                }
+                Spacer()
                 VStack(alignment: .trailing, spacing: 2) {
                     Text(value, format: .currency(code: "CNY")).font(.callout).monospacedDigit()
                     HStack(spacing: 4) { Text("本: \(principal, format: .number.precision(.fractionLength(0...2)))"); Text(ret, format: .percent.precision(.fractionLength(1))).foregroundStyle(ret >= 0 ? .red : .green).padding(.horizontal, 3).background(ret >= 0 ? Color.red.opacity(0.1) : Color.green.opacity(0.1)).cornerRadius(3) }.font(.caption2).foregroundStyle(.secondary)
