@@ -20,6 +20,9 @@ struct SettingsView: View {
     @State private var newAssetName = ""; @State private var newAssetCategory: AssetCategory = .usStocks
     @State private var newAssetValue: Double? = nil; @State private var newAssetPrincipal: Double? = nil
     @State private var assetToDelete: AssetItem? = nil
+    @FocusState private var isNameFocused: Bool
+    @FocusState private var isValueFocused: Bool
+    @FocusState private var isPrincipalFocused: Bool
 
     @AppStorage("aiBaseURL") private var aiBaseURL = "https://open.bigmodel.cn/api/paas/v4"
     @AppStorage("aiModel") private var aiModel = "glm-5v-turbo"
@@ -108,11 +111,38 @@ struct SettingsView: View {
 
     @ViewBuilder
     private var addAssetSection: some View {
-        Section(header: Text("新增具体资产")) {
-            HStack { Text("名称:").frame(width: 40, alignment: .trailing); TextField("如: 标普500 ETF", text: $newAssetName) }
+        Section(header: Text("新增具体资产"), footer: Text("名称必填，市值和本金可选").foregroundStyle(.secondary)) {
+            HStack {
+                Text("名称:").frame(width: 40, alignment: .trailing)
+                TextField("", text: $newAssetName)
+                    .focused($isNameFocused)
+                    .overlay(alignment: .leading) {
+                        if newAssetName.isEmpty, !isNameFocused {
+                            Text("如: 标普500 ETF").foregroundStyle(.secondary).allowsHitTesting(false)
+                        }
+                    }
+            }
             HStack { Text("归属:").frame(width: 40, alignment: .trailing); Picker("", selection: $newAssetCategory) { ForEach(AssetCategory.allCases) { cat in Text(cat.rawValue).tag(cat) } }.pickerStyle(.menu).labelsHidden() }
-            HStack { Text("市值:").frame(width: 40, alignment: .trailing); TextField("初始数值 (可选)", value: $newAssetValue, format: .number.precision(.fractionLength(0...2))) }
-            HStack { Text("本金:").frame(width: 40, alignment: .trailing); TextField("初始投入 (可选)", value: $newAssetPrincipal, format: .number.precision(.fractionLength(0...2))) }
+            HStack {
+                Text("市值:").frame(width: 40, alignment: .trailing)
+                ZStack(alignment: .trailing) {
+                    TextField("", value: $newAssetValue, format: .number.precision(.fractionLength(0...2)))
+                        .focused($isValueFocused)
+                    if newAssetValue == nil, !isValueFocused {
+                        Text("初始数值 (可选)").foregroundStyle(.secondary).allowsHitTesting(false)
+                    }
+                }
+            }
+            HStack {
+                Text("本金:").frame(width: 40, alignment: .trailing)
+                ZStack(alignment: .trailing) {
+                    TextField("", value: $newAssetPrincipal, format: .number.precision(.fractionLength(0...2)))
+                        .focused($isPrincipalFocused)
+                    if newAssetPrincipal == nil, !isPrincipalFocused {
+                        Text("初始投入 (可选)").foregroundStyle(.secondary).allowsHitTesting(false)
+                    }
+                }
+            }
             HStack {
                 Spacer()
                 Button("确认添加") {
@@ -188,6 +218,12 @@ struct SettingsView: View {
                             Spacer()
                             Button("选择文件夹...") { selectBackupDirectory() }
                                 .font(.caption)
+                            Button(action: { NSWorkspace.shared.open(URL(fileURLWithPath: autoSaveManager.autoBackupDirectory)) }) {
+                                Image(systemName: "folder.fill")
+                                    .font(.caption)
+                            }
+                            .buttonStyle(.borderless)
+                            .help("在 Finder 中打开备份目录")
                         }
                         Text(autoSaveManager.autoBackupDirectory)
                             .font(.caption2)

@@ -99,15 +99,28 @@ final class AutoSaveManager {
         let filename = "PortfolioPilot_Backup_\(formatter.string(from: Date())).json"
         let fileURL = URL(fileURLWithPath: dir).appendingPathComponent(filename)
 
-        let backup: [String: Any] = [
-            "totalUserPrincipal": totalPrinc ?? UserDefaults.standard.double(forKey: "totalUserPrincipal"),
-            "absThreshold": UserDefaults.standard.double(forKey: "absThreshold"),
-            "relThreshold": UserDefaults.standard.double(forKey: "relThreshold"),
-            "assetList": assetRaw ?? (UserDefaults.standard.string(forKey: "portfolioAssetsV3") ?? "[]"),
-            "exportDate": formatter.string(from: Date())
-        ]
+        // 构建与手动导出一致的 BackupData 格式
+        let assetListRaw = assetRaw ?? (UserDefaults.standard.string(forKey: "portfolioAssetsV3") ?? "[]")
+        let assetList = AssetList(rawValue: assetListRaw) ?? AssetList(items: [])
 
-        guard let jsonData = try? JSONSerialization.data(withJSONObject: backup, options: .prettyPrinted) else { return }
+        // 获取历史记录
+        var historyItems: [HistoryItemJSON] = []
+        if let ctx = modelContext {
+            let descriptor = FetchDescriptor<PortfolioRecord>(sortBy: [SortDescriptor(\.date)])
+            if let records = try? ctx.fetch(descriptor) {
+                historyItems = records.map { HistoryItemJSON(date: $0.date, totalValue: $0.totalValue, principal: $0.principal, assetSnapshot: $0.assetSnapshot) }
+            }
+        }
+
+        let backup = BackupData(
+            totalUserPrincipal: totalPrinc ?? UserDefaults.standard.double(forKey: "totalUserPrincipal"),
+            absThreshold: UserDefaults.standard.double(forKey: "absThreshold"),
+            relThreshold: UserDefaults.standard.double(forKey: "relThreshold"),
+            history: historyItems,
+            assetList: assetList
+        )
+
+        guard let jsonData = try? JSONEncoder().encode(backup) else { return }
 
         do {
             try jsonData.write(to: fileURL)

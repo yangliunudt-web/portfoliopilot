@@ -25,6 +25,7 @@ struct ContentView: View {
     @AppStorage("cashValue") private var oldCashValue: Double = 0; @AppStorage("cashPrincipal") private var oldCashPrincipal: Double = 0
 
     @State private var inputAmount: Double? = nil
+    @FocusState private var isAmountFocused: Bool
     @State private var operationMode: OperationMode = .invest
     @State private var calculationResult: SmartCalculationResult?
     @State private var showSettings = false
@@ -200,25 +201,32 @@ struct ContentView: View {
         Form {
             Section {
                 Button(action: { showScreenshotImport = true }) {
-                    HStack {
+                    HStack(spacing: 12) {
                         Image(systemName: "camera.viewfinder")
-                            .font(.title3)
-                        VStack(alignment: .leading, spacing: 2) {
+                            .font(.title2)
+                            .foregroundStyle(.blue)
+                            .frame(width: 38, height: 38)
+                            .glassEffect(in: Circle())
+                        VStack(alignment: .leading, spacing: 3) {
                             Text("AI 截图导入").bold().font(.callout)
                             Text("拍照识别持仓，自动更新").font(.caption2).foregroundStyle(.secondary)
                         }
                         Spacer()
-                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                        Image(systemName: "chevron.right")
+                            .font(.caption).foregroundStyle(.secondary)
                     }
-                    .padding(.vertical, 4)
+                    .padding(.horizontal, 12).padding(.vertical, 10)
+                    .glassEffect(in: RoundedRectangle(cornerRadius: 12))
                 }
                 .buttonStyle(.borderless)
+                .foregroundStyle(.primary)
             }
             fundingSection
             positionSection
         }
         .formStyle(.grouped)
         .navigationSplitViewColumnWidth(min: 320, ideal: 380)
+        .task { isAmountFocused = false }
         .toolbar { ToolbarItem(placement: .primaryAction) { Button(action: { showSettings = true }) { Label("设置", systemImage: "gearshape") } } }
         .sheet(isPresented: $showSettings) { SettingsView(resetAction: resetAllData, autoSaveManager: autoSaveManager) }
         .sheet(isPresented: $showScreenshotImport) {
@@ -231,12 +239,21 @@ struct ContentView: View {
             Picker("操作", selection: $operationMode) { ForEach(OperationMode.allCases, id: \.self) { Text($0.rawValue) } }.pickerStyle(.segmented)
             HStack {
                 Text("¥").foregroundStyle(.secondary).font(.title2)
-                TextField("输入操作金额", value: $inputAmount, format: .number.precision(.fractionLength(0...2)))
-                    .textFieldStyle(.plain)
-                    .font(.title2)
-                    .multilineTextAlignment(.center)
-                    .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
-                    .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
+                ZStack {
+                    TextField("", value: $inputAmount, format: .number.precision(.fractionLength(0...2)))
+                        .textFieldStyle(.plain)
+                        .font(.title2)
+                        .multilineTextAlignment(.center)
+                        .focused($isAmountFocused)
+                    if inputAmount == nil, !isAmountFocused {
+                        Text("输入操作金额")
+                            .font(.title2)
+                            .foregroundStyle(.secondary)
+                            .allowsHitTesting(false)
+                    }
+                }
+                .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
+                .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
             }.padding(10).glassEffect(in: RoundedRectangle(cornerRadius: 12))
 
             if let result = calculationResult, let amount = inputAmount, amount > 0 {
@@ -415,40 +432,43 @@ struct ContentView: View {
         let displayProfit = displayVal - displayPrin
         let titleName = activeCategoryName ?? "总资产"
         let baseColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
-        // 收益趋势颜色：整段时间正收益→红，负收益→绿
-        let catColor: Color = {
-            if showProfitColor {
-                let pts = chartDataPoints
-                if let first = pts.first(where: { $0.value > 0 }), let last = pts.last, last.value > 0 {
-                    return last.value >= first.value ? .red : .green
-                }
-                return baseColor
-            }
-            return baseColor
-        }()
+        let profitColor: Color = displayProfit >= 0 ? .red : .green
 
         HStack(alignment: .bottom) {
             VStack(alignment: .leading) {
                 Text(displayRecord?.date ?? Date.now, format: .dateTime.year().month().day().hour().minute()).font(.caption).foregroundStyle(.secondary)
-                HStack(alignment: .firstTextBaseline, spacing: 20) {
-                    VStack(alignment: .leading) {
-                        Text(titleName).font(.caption2).foregroundStyle(.secondary)
-                        Text(displayVal, format: .currency(code: "CNY")).font(.title3).bold().foregroundStyle(catColor)
+                if showProfitColor {
+                    HStack(alignment: .firstTextBaseline, spacing: 20) {
+                        VStack(alignment: .leading) {
+                            Text("收益走势").font(.caption2).foregroundStyle(.secondary)
+                            Text(displayProfit > 0 ? "+\(displayProfit.formatted(.currency(code: "CNY")))" : displayProfit.formatted(.currency(code: "CNY"))).font(.title3).bold().foregroundStyle(profitColor)
+                        }
                     }
-                    VStack(alignment: .leading) {
-                        Text("投入本金").font(.caption2).foregroundStyle(.secondary)
-                        Text(displayPrin, format: .currency(code: "CNY")).font(.title3).bold().foregroundStyle(.gray)
-                    }
-                    VStack(alignment: .leading) {
-                        Text("浮动盈亏").font(.caption2).foregroundStyle(.secondary)
-                        Text(displayProfit > 0 ? "+\(displayProfit.formatted(.currency(code: "CNY")))" : displayProfit.formatted(.currency(code: "CNY"))).font(.title3).bold().foregroundStyle(displayProfit >= 0 ? .red : .green)
+                } else {
+                    HStack(alignment: .firstTextBaseline, spacing: 20) {
+                        VStack(alignment: .leading) {
+                            Text(titleName).font(.caption2).foregroundStyle(.secondary)
+                            Text(displayVal, format: .currency(code: "CNY")).font(.title3).bold().foregroundStyle(baseColor)
+                        }
+                        VStack(alignment: .leading) {
+                            Text("投入本金").font(.caption2).foregroundStyle(.secondary)
+                            Text(displayPrin, format: .currency(code: "CNY")).font(.title3).bold().foregroundStyle(.gray)
+                        }
+                        VStack(alignment: .leading) {
+                            Text("浮动盈亏").font(.caption2).foregroundStyle(.secondary)
+                            Text(displayProfit > 0 ? "+\(displayProfit.formatted(.currency(code: "CNY")))" : displayProfit.formatted(.currency(code: "CNY"))).font(.title3).bold().foregroundStyle(profitColor)
+                        }
                     }
                 }
             }
             Spacer()
             HStack(spacing: 15) {
-                HStack(spacing: 4) { Circle().fill(catColor).frame(width: 6, height: 6); Text(titleName).font(.caption) }
-                HStack(spacing: 4) { Rectangle().fill(Color.gray).frame(width: 12, height: 2); Text("本金").font(.caption) }
+                if showProfitColor {
+                    HStack(spacing: 4) { Circle().fill(profitColor).frame(width: 6, height: 6); Text("收益").font(.caption) }
+                } else {
+                    HStack(spacing: 4) { Circle().fill(baseColor).frame(width: 6, height: 6); Text(titleName).font(.caption) }
+                    HStack(spacing: 4) { Rectangle().fill(Color.gray).frame(width: 12, height: 2); Text("本金").font(.caption) }
+                }
                 Button(action: {
                     withAnimation(.easeInOut(duration: 0.6)) { showProfitColor.toggle() }
                 }) {
@@ -473,16 +493,29 @@ struct ContentView: View {
         if points.isEmpty {
             ContentUnavailableView("该时间段无数据", systemImage: "chart.xyaxis.line").frame(height: 350)
         } else {
-            let catColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
+            let baseColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
 
-            let allValues = points.flatMap { [$0.value, $0.principal] }
-            let minY = max(0, (allValues.min() ?? 0) * 0.85)
-            let maxY = (allValues.max() ?? 100) * 1.05
-            let domainMin = minY
-            let domainMax = maxY
+            // 收益率数据
+            let profitPoints = points.map { ChartDataPoint(date: $0.date, value: $0.value - $0.principal, principal: 0) }
+
+            // 正常模式 Y 轴
+            let normalValues = points.flatMap { [$0.value, $0.principal] }
+            let normalYMin = max(0, (normalValues.min() ?? 0) * 0.85)
+            let normalYMax = (normalValues.max() ?? 100) * 1.05
+
+            // 收益模式 Y 轴
+            let profitVals = profitPoints.map { $0.value }
+            let profitMin = profitVals.min() ?? 0
+            let profitMax = profitVals.max() ?? 0
+            let profitRange = max(profitMax - profitMin, 1)
+            let profitPadding = max(profitRange * 0.12, 50)
+            let profitYMin = min(0, profitMin - profitPadding)
+            let profitYMax = max(0, profitMax + profitPadding)
+
+            let domainMin = showProfitColor ? profitYMin : normalYMin
+            let domainMax = showProfitColor ? profitYMax : normalYMax
 
             let lastPoint = points.last
-            // 跳过连续相同值（回退数据），找第一个真正变化的点
             let firstChangedPoint = points.first(where: { p in
                 guard p.value > 0 else { return false }
                 if let idx = points.firstIndex(where: { $0.id == p.id }), idx + 1 < points.count {
@@ -492,47 +525,73 @@ struct ContentView: View {
             })
             let firstPoint = firstChangedPoint ?? points.first(where: { $0.value > 0 })
             let totalChange: Double = {
-                guard let f = firstPoint, let l = lastPoint, abs(l.value - f.value) > 0.01 else { return 0 }
-                if f.principal > 0 && f.principal != l.principal {
-                    return (l.value / l.principal) - (f.value / f.principal)
-                } else if f.value > 0 {
-                    return (l.value / f.value) - 1
+                if showProfitColor {
+                    guard let f = profitPoints.first, let l = profitPoints.last, abs(l.value - f.value) > 0.01 else { return 0 }
+                    if f.value != 0 { return (l.value - f.value) / abs(f.value) }
+                    return 0
+                } else {
+                    guard let f = firstPoint, let l = lastPoint, abs(l.value - f.value) > 0.01 else { return 0 }
+                    if f.principal > 0 && f.principal != l.principal {
+                        return (l.value / l.principal) - (f.value / f.principal)
+                    } else if f.value > 0 {
+                        return (l.value / f.value) - 1
+                    }
+                    return 0
                 }
-                return 0
+            }()
+
+            let profitColor: Color = {
+                guard let last = profitPoints.last else { return .red }
+                return last.value >= 0 ? .red : .green
+            }()
+
+            let catColor: Color = {
+                if showProfitColor { return profitColor }
+                return baseColor
             }()
 
             VStack(spacing: 0) {
                 GeometryReader { geometry in
                     ZStack(alignment: .topLeading) {
                         Chart {
-                            // 本金虚线
-                            ForEach(points) { point in
-                                LineMark(x: .value("Date", point.date), y: .value("Principal", point.principal), series: .value("Type", "本金"))
+                            if showProfitColor {
+                                ForEach(profitPoints) { point in
+                                    LineMark(x: .value("Date", point.date), y: .value("Profit", point.value), series: .value("Type", "收益"))
+                                        .interpolationMethod(.stepCenter)
+                                        .foregroundStyle(profitColor)
+                                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                                }
+                                RuleMark(y: .value("Zero", 0))
+                                    .foregroundStyle(.gray.opacity(0.25))
+                                    .lineStyle(StrokeStyle(lineWidth: 0.5))
+                            } else {
+                                // 本金虚线
+                                ForEach(points) { point in
+                                    LineMark(x: .value("Date", point.date), y: .value("Principal", point.principal), series: .value("Type", "本金"))
+                                        .interpolationMethod(.stepCenter)
+                                        .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
+                                        .foregroundStyle(.gray.opacity(0.6))
+                                }
+                                // 市值面积渐变
+                                ForEach(points) { point in
+                                    AreaMark(
+                                        x: .value("Date", point.date),
+                                        yStart: .value("Min", domainMin),
+                                        yEnd: .value("Value", point.value)
+                                    )
                                     .interpolationMethod(.stepCenter)
-                                    .lineStyle(StrokeStyle(lineWidth: 1, dash: [5, 5]))
-                                    .foregroundStyle(.gray.opacity(0.6))
-                            }
-
-                            // 市值面积渐变
-                            ForEach(points) { point in
-                                AreaMark(
-                                    x: .value("Date", point.date),
-                                    yStart: .value("Min", domainMin),
-                                    yEnd: .value("Value", point.value)
-                                )
-                                .interpolationMethod(.stepCenter)
-                                .foregroundStyle(LinearGradient(
-                                    colors: [catColor.opacity(0.5), catColor.opacity(0.1), .clear],
-                                    startPoint: .top, endPoint: .bottom
-                                ))
-                            }
-
-                            // 市值主线
-                            ForEach(points) { point in
-                                LineMark(x: .value("Date", point.date), y: .value("Value", point.value), series: .value("Type", "市值"))
-                                    .interpolationMethod(.stepCenter)
-                                    .foregroundStyle(catColor)
-                                    .lineStyle(StrokeStyle(lineWidth: 2.5))
+                                    .foregroundStyle(LinearGradient(
+                                        colors: [catColor.opacity(0.5), catColor.opacity(0.1), .clear],
+                                        startPoint: .top, endPoint: .bottom
+                                    ))
+                                }
+                                // 市值主线
+                                ForEach(points) { point in
+                                    LineMark(x: .value("Date", point.date), y: .value("Value", point.value), series: .value("Type", "市值"))
+                                        .interpolationMethod(.stepCenter)
+                                        .foregroundStyle(catColor)
+                                        .lineStyle(StrokeStyle(lineWidth: 2.5))
+                                }
                             }
 
                             // 鼠标竖线
@@ -595,7 +654,6 @@ struct ContentView: View {
                         }
                         .chartOverlay { chartProxy in
                             GeometryReader { geo in
-                                // 扣除 Y 轴宽度，只取绘图区百分比
                                 let plotOriginX: CGFloat = chartProxy.plotFrame.map { geo[$0].minX } ?? 37
                                 let plotWidth: CGFloat = chartProxy.plotFrame.map { geo[$0].width } ?? (geo.size.width - 37)
 
@@ -619,14 +677,13 @@ struct ContentView: View {
                             }
                         }
 
-                        // 拖动日期标签
                         if isDraggingRange, let r = rangeSelection {
                             Text("\(r.lowerBound, format: .dateTime.month().day()) — \(r.upperBound, format: .dateTime.month().day())")
                                 .font(.system(size: 10).monospacedDigit())
                                 .padding(.horizontal, 6).padding(.vertical, 2)
                                 .background(Color.blue.opacity(0.2))
                                 .cornerRadius(3)
-                                .offset(x: 8, y: 8)
+                                .offset(x: 8, y: -22)
                         }
                     }
                 }
@@ -634,11 +691,20 @@ struct ContentView: View {
 
                 // 底部：当前时间范围收益率
                 HStack {
-                    if let f = firstPoint, let l = lastPoint, f.principal > 0 {
-                        Text("当前范围: \(f.date, format: .dateTime.month().day()) → \(l.date, format: .dateTime.month().day())")
-                            .font(.system(size: 9)).foregroundStyle(.secondary)
-                        Text("收益率 \(totalChange >= 0 ? "+" : "")\(totalChange * 100, specifier: "%.2f")%")
-                            .font(.system(size: 9).bold()).foregroundStyle(totalChange >= 0 ? .red : .green)
+                    if showProfitColor {
+                        if let f = profitPoints.first, let l = profitPoints.last {
+                            Text("当前范围: \(f.date, format: .dateTime.month().day()) → \(l.date, format: .dateTime.month().day())")
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
+                            Text("收益变化 \(l.value >= 0 ? "+" : "")\(l.value, specifier: "%.0f")")
+                                .font(.system(size: 9).bold()).foregroundStyle(l.value >= 0 ? .red : .green)
+                        }
+                    } else {
+                        if let f = firstPoint, let l = lastPoint, f.principal > 0 {
+                            Text("当前范围: \(f.date, format: .dateTime.month().day()) → \(l.date, format: .dateTime.month().day())")
+                                .font(.system(size: 9)).foregroundStyle(.secondary)
+                            Text("收益率 \(totalChange >= 0 ? "+" : "")\(totalChange * 100, specifier: "%.2f")%")
+                                .font(.system(size: 9).bold()).foregroundStyle(totalChange >= 0 ? .red : .green)
+                        }
                     }
                     Spacer()
                     if rangeSelection != nil {
@@ -651,28 +717,33 @@ struct ContentView: View {
                 }
                 .padding(.top, 6)
             }
-            .overlay(alignment: .topTrailing) {
+            .overlay(alignment: .top) {
                 if let stats = rangeStats {
-                    VStack(alignment: .trailing, spacing: 6) {
-                        HStack {
-                            Text("区间统计").font(.caption).bold()
-                            Spacer()
-                            Button("✕") { rangeSelection = nil }
-                                .font(.caption2).foregroundStyle(.secondary).buttonStyle(.plain)
+                    HStack(spacing: 10) {
+                        Image(systemName: "selection.pin.in.out").font(.caption2).foregroundStyle(.blue)
+                        if showProfitColor {
+                            let profitChange = stats.valueChange - stats.principalChange
+                            Text("收益变化").font(.caption2).foregroundStyle(.secondary)
+                            Text("\(profitChange >= 0 ? "+" : "")\(profitChange, specifier: "%.0f")")
+                                .font(.caption).bold().monospacedDigit().foregroundStyle(profitChange >= 0 ? .red : .green)
+                        } else {
+                            Text("市值").font(.caption2).foregroundStyle(.secondary)
+                            Text("\(stats.valueChange >= 0 ? "+" : "")\(stats.valueChange, specifier: "%.0f")")
+                                .font(.caption).bold().monospacedDigit().foregroundStyle(stats.valueChange >= 0 ? .red : .green)
+                            Text("本金").font(.caption2).foregroundStyle(.secondary)
+                            Text("\(stats.principalChange >= 0 ? "+" : "")\(stats.principalChange, specifier: "%.0f")")
+                                .font(.caption).bold().monospacedDigit().foregroundStyle(stats.principalChange >= 0 ? .red : .green)
                         }
-                        Divider()
-                        statRow("市值变化", stats.valueChange, stats.valueChange >= 0 ? .red : .green)
-                        statRow("本金变化", stats.principalChange, stats.principalChange >= 0 ? .red : .green)
-                        statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
-                        Divider()
-                        statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
+                        Text("收益率").font(.caption2).foregroundStyle(.secondary)
+                        Text("\(stats.yield >= 0 ? "+" : "")\(stats.yield * 100, specifier: "%.2f")%")
+                            .font(.caption).bold().monospacedDigit().foregroundStyle(stats.yield >= 0 ? .red : .green)
+                        Button(action: { rangeSelection = nil }) {
+                            Image(systemName: "xmark.circle.fill").font(.caption2).foregroundStyle(.secondary.opacity(0.6))
+                        }.buttonStyle(.plain)
                     }
-                    .padding(10)
-                    .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
-                    .cornerRadius(8)
-                    .shadow(color: .black.opacity(0.1), radius: 4, x: 0, y: 2)
-                    .frame(width: 200)
-                    .padding(8)
+                    .padding(.horizontal, 14).padding(.vertical, 7)
+                    .glassEffect(in: Capsule())
+                    .offset(y: -12)
                 }
             }
         }
