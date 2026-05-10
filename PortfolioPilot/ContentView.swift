@@ -627,7 +627,6 @@ struct ContentView: View {
                         statRow("浮动盈亏", stats.valueChange - stats.principalChange, (stats.valueChange - stats.principalChange) >= 0 ? .red : .green)
                         Divider()
                         statRow("收益率", stats.yield, stats.yield >= 0 ? .red : .green, isPercent: true)
-                        statRow("年化率", stats.annualizedYield, stats.annualizedYield >= 0 ? .red : .green, isPercent: true)
                     }
                     .padding(10)
                     .background(Color(nsColor: .windowBackgroundColor).opacity(0.95))
