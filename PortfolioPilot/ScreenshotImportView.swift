@@ -136,7 +136,7 @@ struct ScreenshotImportView: View {
                     .frame(minWidth: 160)
                 }
                 .buttonStyle(.glassProminent)
-                .disabled(image == nil)
+                .tint(image == nil ? .secondary : .blue)
                 .font(.title3)
 
                 Text("点击开始识别，AI 将自动分析截图中的持仓")

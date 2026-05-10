@@ -200,7 +200,17 @@ struct ContentView: View {
         Form {
             Section {
                 Button(action: { showScreenshotImport = true }) {
-                    Label("截图导入", systemImage: "camera.viewfinder")
+                    HStack {
+                        Image(systemName: "camera.viewfinder")
+                            .font(.title3)
+                        VStack(alignment: .leading, spacing: 2) {
+                            Text("AI 截图导入").bold().font(.callout)
+                            Text("拍照识别持仓，自动更新").font(.caption2).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        Image(systemName: "chevron.right").font(.caption).foregroundStyle(.secondary)
+                    }
+                    .padding(.vertical, 4)
                 }
                 .buttonStyle(.borderless)
             }
@@ -225,7 +235,6 @@ struct ContentView: View {
                     .textFieldStyle(.plain)
                     .font(.title2)
                     .multilineTextAlignment(.center)
-                    .foregroundStyle(.primary)
                     .onChange(of: inputAmount) { _, val in if let val = val { calculatePreview(amount: val) } else { calculationResult = nil } }
                     .onChange(of: operationMode) { _, _ in if let val = inputAmount { calculatePreview(amount: val) } }
             }.padding(10).glassEffect(in: RoundedRectangle(cornerRadius: 12))
@@ -406,10 +415,14 @@ struct ContentView: View {
         let displayProfit = displayVal - displayPrin
         let titleName = activeCategoryName ?? "总资产"
         let baseColor = activeCategoryName.flatMap { AssetCategory(rawValue: $0)?.color } ?? Color(hex: "#00C7BE")
-        // 收益趋势颜色：正红负绿，未启用时用原色
+        // 收益趋势颜色：整段时间正收益→红，负收益→绿
         let catColor: Color = {
             if showProfitColor {
-                return displayProfit >= 0 ? .red : .green
+                let pts = chartDataPoints
+                if let first = pts.first(where: { $0.value > 0 }), let last = pts.last, last.value > 0 {
+                    return last.value >= first.value ? .red : .green
+                }
+                return baseColor
             }
             return baseColor
         }()
